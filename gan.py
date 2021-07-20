@@ -1,7 +1,8 @@
 import random
+import math
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from IPython.display import HTML
+plt.rcParams['animation.ffmpeg_path'] ='D:\\ffmpeg\\bin\\ffmpeg.exe'
+from matplotlib.animation import FFMpegWriter
 
 import torch
 import torch.nn as nn
@@ -20,6 +21,9 @@ with code from
 https://github.com/black0017/3D-GAN-pytorch
 Training etc based on
 https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
+Debugging using (in part)
+https://machinelearningmastery.com/practical-guide-to-gan-failure-modes/
+showes mode collapse
 """
 
 
@@ -65,7 +69,7 @@ class Discriminator(torch.nn.Module):
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.out = nn.Sequential(
-            nn.Linear(out_conv_channels * self.out_dim * self.out_dim * self.out_dim, 1),
+            nn.Linear(out_conv_channels * self.out_dim * self.out_dim * self.out_dim, 1, bias=False),
             nn.Sigmoid(),
         )
 
@@ -85,7 +89,16 @@ class Generator(torch.nn.Module):
         super(Generator, self).__init__()
         self.in_channels = in_channels
         self.out_dim = out_dim
-        self.in_dim = int(out_dim // 16)
+
+        # Allow outputs that are not dividable by 16 by cutting
+        # alternative is output padding
+        self.in_dim = math.ceil(out_dim / 16)
+        dif_16 = 16 * self.in_dim - self.out_dim
+        self.cut1 = dif_16 % 16 // 8
+        self.cut2 = dif_16 % 8 // 4
+        self.cut3 = dif_16 % 4 // 2
+        self.cut4 = dif_16 % 2 // 1
+
         conv1_out_channels = int(self.in_channels / 2.0)
         conv2_out_channels = int(conv1_out_channels / 2)
         conv3_out_channels = int(conv2_out_channels / 2)
@@ -95,7 +108,7 @@ class Generator(torch.nn.Module):
         self.conv1 = nn.Sequential(
             nn.ConvTranspose3d(
                 in_channels=in_channels, out_channels=conv1_out_channels, kernel_size=(4, 4, 4),
-                stride=2, padding=1, bias=False, output_padding=self.out_dim % 16 // 8,
+                stride=2, padding=1, bias=False,
             ),
             nn.BatchNorm3d(conv1_out_channels),
             nn.ReLU(inplace=True)
@@ -103,7 +116,7 @@ class Generator(torch.nn.Module):
         self.conv2 = nn.Sequential(
             nn.ConvTranspose3d(
                 in_channels=conv1_out_channels, out_channels=conv2_out_channels, kernel_size=(4, 4, 4),
-                stride=2, padding=1, bias=False, output_padding=self.out_dim % 8 // 4,
+                stride=2, padding=1, bias=False,
             ),
             nn.BatchNorm3d(conv2_out_channels),
             nn.ReLU(inplace=True)
@@ -111,7 +124,7 @@ class Generator(torch.nn.Module):
         self.conv3 = nn.Sequential(
             nn.ConvTranspose3d(
                 in_channels=conv2_out_channels, out_channels=conv3_out_channels, kernel_size=(4, 4, 4),
-                stride=2, padding=1, bias=False, output_padding=self.out_dim % 4 // 2,
+                stride=2, padding=1, bias=False,
             ),
             nn.BatchNorm3d(conv3_out_channels),
             nn.ReLU(inplace=True)
@@ -119,7 +132,7 @@ class Generator(torch.nn.Module):
         self.conv4 = nn.Sequential(
             nn.ConvTranspose3d(
                 in_channels=conv3_out_channels, out_channels=out_channels, kernel_size=(4, 4, 4),
-                stride=2, padding=1, bias=False, output_padding=self.out_dim % 2,
+                stride=2, padding=1, bias=False,
             )
         )
         if activation == "sigmoid":
@@ -135,13 +148,24 @@ class Generator(torch.nn.Module):
         """
         return x.view(-1, self.in_channels, self.in_dim, self.in_dim, self.in_dim)
 
+    def cut(self, x, cut):
+        """
+        cuts the borders of a tensor if necessary
+        """
+        sz = x.size()
+        return x[:, :, 0:(sz[2]-cut), 0:(sz[3]-cut), 0:(sz[4]-cut)]
+
     def forward(self, x):
         x = self.linear(x)
         x = self.project(x)
         x = self.conv1(x)
+        x = self.cut(x, self.cut1)
         x = self.conv2(x)
+        x = self.cut(x, self.cut2)
         x = self.conv3(x)
+        x = self.cut(x, self.cut3)
         x = self.conv4(x)
+        x = self.cut(x, self.cut4)
         return self.out(x)
 
 
@@ -149,15 +173,59 @@ def test_gan3d():
     noise_dim = 200
     in_channels = 512
     dim = 100  # cube volume
-    model_generator = Generator(in_channels=512, out_dim=dim, out_channels=1, noise_dim=noise_dim)
+    netG = Generator(in_channels=in_channels, out_dim=dim, out_channels=1, noise_dim=noise_dim)
     noise = torch.rand(1, noise_dim)
-    generated_volume = model_generator(noise)
+    generated_volume = netG(noise)
     print("Generator output shape", generated_volume.shape)
-    model_discriminator = Discriminator(in_channels=1, dim=dim, out_conv_channels=in_channels)
-    out = model_discriminator(generated_volume)
+    netD = Discriminator(in_channels=1, dim=dim, out_conv_channels=in_channels)
+    out = netD(generated_volume)
     print("Discriminator output", out)
-    summary(model_generator, (1, noise_dim))
-    summary(model_discriminator, (1, 100, 100, 100))
+    summary(netG, (1, noise_dim), device="cpu")
+    summary(netD, (1, 100, 100, 100), device="cpu")
+
+
+def inspect_netD(path):
+    # Device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    in_channels = 512
+    dim = 100
+    netD = Discriminator(in_channels=1, dim=dim, out_conv_channels=in_channels).to(device)
+    netD.load_state_dict(torch.load(path, map_location=device))
+    summary(netD, (1, 100, 100, 100))
+    print("Parameter means/std")
+    for n, p in netD.named_parameters():
+        if p.requires_grad:
+            print(n, p.data.mean(), p.data.std())
+    return netD
+
+
+def inspect_netG(path):
+    # Device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    in_channels = 512
+    dim = 100
+    noise_dim = 400
+    netG = Generator(in_channels=in_channels, out_dim=dim, out_channels=1, noise_dim=noise_dim).to(device)
+    netG.load_state_dict(torch.load(path, map_location=device))
+
+    summary(netG, (1, noise_dim))
+    print("Parameter means/std")
+    for n, p in netG.named_parameters():
+        if p.requires_grad:
+            print(n, p.data.mean(), p.data.std())
+
+    for i in range(5):
+        noise = torch.randn(8, noise_dim, device=device)
+        with torch.no_grad():
+            fake = netG(noise).detach().cpu()
+        plot_batch(fake, 2)
+        plot_batch(fake, 1)
+        plot_batch(fake, 0)
+        plt.show()
+
+    return netG
 
 
 # custom weights initialization called on netG and netD
@@ -177,7 +245,7 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     :param img_dirs: path (or list of paths) to image npy files
     :param loadG: if not "", load Generator from here and continue training
     :param loadD: same for Discriminator
-    :param: checkpoints: if state of Generator/Discriminator should be saved after each epoch
+    :param checkpoints: if state of Generator/Discriminator should be saved after each epoch
     :param num_epochs: number of epochs to train
     """
     # Seed
@@ -189,10 +257,10 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     data = Betondata(img_dirs=img_dirs, transform=transforms.Lambda(normalize(32.69, 4.98)))
-    dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=2)
+    dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=1)
 
     # CNNs
-    noise_dim = 200
+    noise_dim = 400
     in_channels = 512
     dim = 100
     netG = Generator(in_channels=512, out_dim=dim, out_channels=1, noise_dim=noise_dim).to(device)
@@ -205,11 +273,13 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
         try:
             netG.load_state_dict(torch.load(loadG))
         except FileNotFoundError:
+            print("No Generator loaded")
             pass
     if loadD != '':
         try:
             netD.load_state_dict(torch.load(loadD))
         except FileNotFoundError:
+            print("No Discriminator loaded")
             pass
 
     # Binary Cross Entropy Loss
@@ -242,40 +312,48 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
         # For each batch in the dataloader
         for i, data in enumerate(dataloader, 0):
 
-            ############################
-            # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
-            ###########################
-            # Train with all-real batch
-            netD.zero_grad()
             # Format batch
             real_cpu = data["X"].to(device)
-            b_size = real_cpu.size(0)
-            label = torch.full((b_size,), real_label, dtype=torch.float, device=device)
-            # Forward pass real batch through D
-            output = netD(real_cpu).view(-1)
-            # Calculate loss on all-real batch
-            errD_real = criterion(output, label)
-            # Calculate gradients for D in backward pass
-            errD_real.backward()
-            D_x = output.mean().item()
 
-            # Train with all-fake batch
-            # Generate batch of latent vectors
-            noise = torch.randn(b_size, noise_dim, device=device)
-            # Generate fake image batch with G
-            fake = netG(noise)
-            label.fill_(fake_label)
-            # Classify all fake batch with D
-            output = netD(fake.detach()).view(-1)
-            # Calculate D's loss on the all-fake batch
-            errD_fake = criterion(output, label)
-            # Calculate the gradients for this batch, accumulated (summed) with previous gradients
-            errD_fake.backward()
-            D_G_z1 = output.mean().item()
-            # Compute error of D as sum over the fake and the real batches
-            errD = errD_real + errD_fake
-            # Update D
-            optimizerD.step()
+            if iters % 10 == 0:
+                smooth = 0.9
+                ############################
+                # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                ###########################
+                # Train with all-real batch
+                netD.zero_grad()
+                b_size = real_cpu.size(0)
+                label = torch.full((b_size,), smooth * real_label, dtype=torch.float, device=device)
+                # Forward pass real batch through D
+                output = netD(real_cpu).view(-1)
+                # Calculate loss on all-real batch
+                errD_real = criterion(output, label)
+                # Calculate gradients for D in backward pass
+                errD_real.backward()
+                D_x = output.mean().item()
+
+                # Train with all-fake batch
+                # Generate batch of latent vectors
+                noise = torch.randn(b_size, noise_dim, device=device)
+                # Generate fake image batch with G
+                fake = netG(noise)
+                label.fill_(smooth * fake_label)
+                # Classify all fake batch with D
+                output = netD(fake.detach()).view(-1)
+                # Calculate D's loss on the all-fake batch
+                errD_fake = criterion(output, label)
+                # Calculate the gradients for this batch, accumulated (summed) with previous gradients
+                errD_fake.backward()
+                D_G_z1 = output.mean().item()
+                # Compute error of D as sum over the fake and the real batches
+                errD = errD_real + errD_fake
+                # Update D
+                optimizerD.step()
+            else:
+                b_size = real_cpu.size(0)
+                noise = torch.randn(b_size, noise_dim, device=device)
+                fake = netG(noise)
+                label = torch.full((b_size,), fake_label, dtype=torch.float, device=device)
 
             ############################
             # (2) Update G network: maximize log(D(G(z)))
@@ -304,14 +382,16 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
             D_losses.append(errD.item())
 
             # Check how the generator is doing by saving G's output on fixed_noise
-            if (iters % 100 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
+            if (iters % 20 == 0) or ((epoch == num_epochs - 1) and (i == len(dataloader) - 1)):
                 with torch.no_grad():
                     fake = netG(fixed_noise).detach().cpu()
                 img_list.append(plot_batch(fake))
+                plt.pause(0.00001)
+                plt.close()
 
             iters += 1
 
-            if checkpoints:
+            if checkpoints and (iters % 100 == 0):
                 # do checkpointing
                 torch.save(netG.state_dict(), '%s_epoch_%d' % (loadG or "netG", epoch))
                 torch.save(netD.state_dict(), '%s_epoch_%d' % (loadD or "netD", epoch))
@@ -323,15 +403,20 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     plt.xlabel("iterations")
     plt.ylabel("Loss")
     plt.legend()
+    plt.savefig("prog.png")
     plt.show()
 
-    fig = plt.figure(figsize=(8, 8))
+    fig, ax = plt.subplots(figsize=(8, 8))
     plt.axis("off")
-    ims = [[plt.imshow(i, animated=True)] for i in img_list]
-    ani = animation.ArtistAnimation(fig, ims, interval=1000, repeat_delay=1000, blit=True)
-    HTML(ani.to_jshtml())
+    Writer = FFMpegWriter(fps=5)
+    Writer.setup(fig, "gan_progress.mp4", dpi=100)
+    for i in img_list:
+        ax.imshow(i, animated=True)
+        Writer.grab_frame()
+    Writer.finish()
 
 
 if __name__ == "__main__":
-    train_gan3d(img_dirs="D:Data/Beton/HPC/xyz-100-npy/", loadG="nets/netG", loadD="nets/netD",
-                checkpoints=True, num_epochs=5)
+    # test_gan3d()
+    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=20)
+    # inspect_netG("nets/netG_epoch_0_old")

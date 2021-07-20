@@ -23,7 +23,8 @@ class Betondata(Dataset):
             img_dirs = [img_dirs]
 
         self.img_names = [dir + f for dir in img_dirs for f in os.listdir(dir)]
-        self.img_names = sorted(filter(lambda k: k.endswith("npy"), self.img_names))
+        self.img_names = list(filter(lambda k: k.endswith("npy"), self.img_names))
+        self.img_names = sorted(self.img_names, key=lambda s: int(s.split("/")[-1][:-4]))
         self.preload = preload
         self.transform = transform
 
@@ -60,7 +61,6 @@ def plot_batch(x, acc=2):
             x, 2, 2 + acc)[:, :, 0:80:10, :, :], 1, 2), (-1, 1, 100, 100)),
             padding=2, normalize=True).cpu(), (1, 2, 0))
     plt.imshow(img)
-    plt.pause(0.00001)
     return img
 
 
@@ -73,11 +73,7 @@ class normalize:
         return (t - self.mean) / self.std
 
 
-if __name__ == "__main__":
-    data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/",
-                     transform=transforms.Lambda(normalize(32.69, 4.98)))
-    dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=2)
-
+def mean_std():
     # Compute mean and std
     mean = 0
     for i, batch in enumerate(dataloader):
@@ -90,7 +86,7 @@ if __name__ == "__main__":
 
     var = 0
     for i, batch in enumerate(dataloader):
-        batch_var = torch.mean((batch["X"] - mean)**2)
+        batch_var = torch.mean((batch["X"] - mean) ** 2)
         var += batch_var * batch["X"].size(0)
         if i % 50:
             print("%.2f %% - %.2f" % (100 * i / len(dataloader), batch_var))
@@ -98,9 +94,19 @@ if __name__ == "__main__":
     std = np.sqrt(var)
     print("mean: %.2f \\ std: %.2f" % (mean, std))
 
-    batch = next(iter(dataloader))["X"]
 
-    plot_batch(batch, 2)
+if __name__ == "__main__":
+    data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/",
+                     transform=transforms.Lambda(normalize(32.69, 4.98)))
+    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
+
+    # mean_std()
+
+    for batch in dataloader:
+        batch = batch["X"]
+        plot_batch(batch, 2)
+        plt.show()
+        
     plot_batch(batch, 1)
     plot_batch(batch, 0)
     plt.show()
