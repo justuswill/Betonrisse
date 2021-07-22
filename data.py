@@ -64,13 +64,31 @@ def plot_batch(x, acc=2):
     return img
 
 
+class ToTensor:
+    def __call__(self, t):
+        return torch.from_numpy(t)
+
+
 class normalize:
+    # HPC/riss: 33.24, 6.69
+    # HPC:      32.69, 4.98
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
 
     def __call__(self, t):
         return (t - self.mean) / self.std
+
+
+class random_rotate_flip_3d:
+    def __call__(self, t):
+        # flip
+        if np.random.choice([True, False]):
+            t = torch.flip(t, [1])
+        # rotate xy planes
+        rot = np.random.choice(4)
+        t = torch.rot90(t, rot, (1, 2))
+        return t
 
 
 def mean_std():
@@ -96,11 +114,15 @@ def mean_std():
 
 
 if __name__ == "__main__":
-    data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/",
-                     transform=transforms.Lambda(normalize(32.69, 4.98)))
-    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
+    data = Betondata(img_dirs="D:Data/Beton/HPC/riss/",
+                     transform=transforms.Lambda(normalize(33.24, 6.69)))
+    dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=2)
 
-    # mean_std()
+    # data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/",
+    #                  transform=transforms.Lambda(normalize(32.69, 4.98)))
+    # dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=2)
+
+    mean_std()
 
     for batch in dataloader:
         batch = batch["X"]

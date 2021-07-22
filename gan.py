@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim as optim
 
-from data import Betondata, plot_batch, normalize
+from data import Betondata, plot_batch, ToTensor, normalize, random_rotate_flip_3d
 
 
 """
@@ -23,7 +23,10 @@ Training etc based on
 https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 Debugging using (in part)
 https://machinelearningmastery.com/practical-guide-to-gan-failure-modes/
+https://stackoverflow.com/questions/44313306/dcgans-discriminator-getting-too-strong-too-quickly-to-allow-generator-to-learn
 showes mode collapse
+fixed with
+batch normalization between G and D, random rotate/flip, label smoothing, cut vs pad
 """
 
 
@@ -84,7 +87,7 @@ class Discriminator(torch.nn.Module):
         return x
 
 
-class Generator(torch.nn.Module):
+class Generator_padding(torch.nn.Module):
     def __init__(self, in_channels=512, out_dim=64, out_channels=1, noise_dim=200, activation="sigmoid"):
         super(Generator, self).__init__()
         self.in_channels = in_channels
@@ -166,6 +169,91 @@ class Generator(torch.nn.Module):
         x = self.cut(x, self.cut3)
         x = self.conv4(x)
         x = self.cut(x, self.cut4)
+        return self.out(x)
+
+
+class Generator(torch.nn.Module):
+    def __init__(self, in_channels=512, out_dim=64, out_channels=1, noise_dim=200, activation="sigmoid"):
+        super(Generator, self).__init__()
+        self.in_channels = in_channels
+        self.out_dim = out_dim
+
+        # Allow outputs that are not dividable by 16 by cutting
+        # alternative is output padding
+        self.in_dim = math.ceil(out_dim / 16)
+        dif_16 = 16 * self.in_dim - self.out_dim
+        self.cut1 = dif_16 % 16 // 8
+        self.cut2 = dif_16 % 8 // 4
+        self.cut3 = dif_16 % 4 // 2
+        self.cut4 = dif_16 % 2 // 1
+
+        conv1_out_channels = int(self.in_channels / 2.0)
+        conv2_out_channels = int(conv1_out_channels / 2)
+        conv3_out_channels = int(conv2_out_channels / 2)
+
+        self.linear = torch.nn.Linear(noise_dim, self.in_channels * self.in_dim * self.in_dim * self.in_dim)
+
+        self.conv1 = nn.Sequential(
+            nn.ConvTranspose3d(
+                in_channels=in_channels, out_channels=conv1_out_channels, kernel_size=(4, 4, 4),
+                stride=2, padding=0, bias=False,
+            ),
+            nn.BatchNorm3d(conv1_out_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.conv2 = nn.Sequential(
+            nn.ConvTranspose3d(
+                in_channels=conv1_out_channels, out_channels=conv2_out_channels, kernel_size=(4, 4, 4),
+                stride=2, padding=0, bias=False,
+            ),
+            nn.BatchNorm3d(conv2_out_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.conv3 = nn.Sequential(
+            nn.ConvTranspose3d(
+                in_channels=conv2_out_channels, out_channels=conv3_out_channels, kernel_size=(4, 4, 4),
+                stride=2, padding=0, bias=False,
+            ),
+            nn.BatchNorm3d(conv3_out_channels),
+            nn.ReLU(inplace=True)
+        )
+        self.conv4 = nn.Sequential(
+            nn.ConvTranspose3d(
+                in_channels=conv3_out_channels, out_channels=out_channels, kernel_size=(4, 4, 4),
+                stride=2, padding=0, bias=False,
+            )
+        )
+        if activation == "sigmoid":
+            self.out = torch.nn.Sigmoid()
+        else:
+            self.out = torch.nn.Tanh()
+
+    def project(self, x):
+        """
+        projects and reshapes latent vector to starting volume
+        :param x: latent vector
+        :return: starting volume
+        """
+        return x.view(-1, self.in_channels, self.in_dim, self.in_dim, self.in_dim)
+
+    def cut(self, x, cut, pad=0):
+        """
+        cuts the borders of a tensor if necessary
+        """
+        sz = x.size()
+        return x[:, :, pad:(sz[2]-cut-pad), pad:(sz[3]-cut-pad), pad:(sz[4]-cut-pad)]
+
+    def forward(self, x):
+        x = self.linear(x)
+        x = self.project(x)
+        x = self.conv1(x)
+        x = self.cut(x, self.cut1, pad=1)
+        x = self.conv2(x)
+        x = self.cut(x, self.cut2, pad=1)
+        x = self.conv3(x)
+        x = self.cut(x, self.cut3, pad=1)
+        x = self.conv4(x)
+        x = self.cut(x, self.cut4, pad=1)
         return self.out(x)
 
 
@@ -256,11 +344,15 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    data = Betondata(img_dirs=img_dirs, transform=transforms.Lambda(normalize(32.69, 4.98)))
+    data = Betondata(img_dirs=img_dirs, transform=transforms.Compose([
+        transforms.Lambda(ToTensor()),
+        transforms.Lambda(normalize(33.24, 6.69)),
+        transforms.Lambda(random_rotate_flip_3d())
+    ]))
     dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=1)
 
     # CNNs
-    noise_dim = 400
+    noise_dim = 200
     in_channels = 512
     dim = 100
     netG = Generator(in_channels=512, out_dim=dim, out_channels=1, noise_dim=noise_dim).to(device)
@@ -315,8 +407,8 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
             # Format batch
             real_cpu = data["X"].to(device)
 
-            if iters % 10 == 0:
-                smooth = 0.9
+            if iters % 1 == 0:
+                smooth = 0.8
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
@@ -337,6 +429,12 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
                 noise = torch.randn(b_size, noise_dim, device=device)
                 # Generate fake image batch with G
                 fake = netG(noise)
+
+                # Normalize the generator output
+                mean = torch.mean(fake)
+                std = torch.sqrt(torch.mean((fake - mean) ** 2))
+                fake = (fake - mean) / std
+
                 label.fill_(smooth * fake_label)
                 # Classify all fake batch with D
                 output = netD(fake.detach()).view(-1)
@@ -353,6 +451,12 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
                 b_size = real_cpu.size(0)
                 noise = torch.randn(b_size, noise_dim, device=device)
                 fake = netG(noise)
+
+                # Normalize the generator output
+                mean = torch.mean(fake)
+                std = torch.sqrt(torch.mean((fake - mean) ** 2))
+                fake = (fake - mean) / std
+
                 label = torch.full((b_size,), fake_label, dtype=torch.float, device=device)
 
             ############################
@@ -391,10 +495,10 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
 
             iters += 1
 
-            if checkpoints and (iters % 100 == 0):
-                # do checkpointing
-                torch.save(netG.state_dict(), '%s_epoch_%d' % (loadG or "netG", epoch))
-                torch.save(netD.state_dict(), '%s_epoch_%d' % (loadD or "netD", epoch))
+        if checkpoints:
+            # do checkpointing
+            torch.save(netG.state_dict(), '%s_epoch_%d' % (loadG or "netG", epoch))
+            torch.save(netD.state_dict(), '%s_epoch_%d' % (loadD or "netD", epoch))
 
     plt.figure(figsize=(10, 5))
     plt.title("Generator and Discriminator Loss During Training")
@@ -418,5 +522,5 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
 
 if __name__ == "__main__":
     # test_gan3d()
-    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=20)
+    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
     # inspect_netG("nets/netG_epoch_0_old")
