@@ -39,6 +39,22 @@ def convert(img_path, dest):
         np.save(dest + img_path.split("/")[-1][:-4] + "_%d.npy" % i, image)
 
 
+def convert_3d(img_path, dest):
+    """
+    read tif and convert to .npy file
+    """
+    image_stack = Image.open(img_path)
+
+    image_list = []
+    for i in range(image_stack.n_frames):
+        # read
+        image_stack.seek(i)
+        image_list += [np.array(image_stack)]
+
+    # save
+    np.save(dest + img_path.split("/")[-1][:-4] + ".npy", np.stack(image_list, axis=2))
+
+
 def split_overlap(arr, d, axis, overlap=True):
     """
     split an array into chunks of size dxdx...xd with 50 % overlap, discarding excess
@@ -89,6 +105,7 @@ if __name__ == "__main__":
 
     # Cut into 100x100x100
     # cut("D:Data/Beton/Real-1/xy-npy/", "D:Data/Beton/Real-1/xyz-100-npy/", d=100)
-    cut("D:Data/Beton/HPC/xy-npy/", "D:Data/Beton/HPC/xyz-100-npy/", d=100)
-    cut("D:Data/Beton/NC/xy-npy/", "D:Data/Beton/NC/xyz-100-npy/", d=100)
+    # cut("D:Data/Beton/HPC/xy-npy/", "D:Data/Beton/HPC/xyz-100-npy/", d=100)
+    # cut("D:Data/Beton/NC/xy-npy/", "D:Data/Beton/NC/xyz-100-npy/", d=100)
+    convert_3d("D:Data/Beton/Synth/width1/input/crack_1_256_w1_1.tif", "D:Data/Beton/Synth/npy/")
 
