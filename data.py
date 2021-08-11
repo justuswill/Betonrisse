@@ -54,11 +54,15 @@ class Betondata(Dataset):
             return {"X": sample}
         else:
             if self.label_names[idx] is not None:
-                label = np.load(self.label_names[idx])
-            elif self.binary_labels:
-                label = 0.0
+                if self.binary_labels:
+                    label = 1.0
+                else:
+                    label = np.load(self.label_names[idx])
             else:
-                label = np.zeros(sample.shape, sample.dtype)
+                if self.binary_labels:
+                    label = 0.0
+                else:
+                    label = np.zeros(sample.shape, sample.dtype)
             return {"X": sample, "y": label}
 
 
