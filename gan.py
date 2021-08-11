@@ -521,6 +521,6 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
 
 
 if __name__ == "__main__":
-    # test_gan3d()
-    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
+    test_gan3d()
+    # train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
     # inspect_netG("nets/netG_epoch_0_old")
