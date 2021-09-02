@@ -1,5 +1,6 @@
 import random
 import math
+import numpy as np
 import matplotlib.pyplot as plt
 plt.rcParams['animation.ffmpeg_path'] ='D:\\ffmpeg\\bin\\ffmpeg.exe'
 from matplotlib.animation import FFMpegWriter
@@ -339,11 +340,13 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     # Seed
     seed = 123
     random.seed(seed)
+    np.random.seed(seed)
     torch.manual_seed(seed)
 
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    # Data
     data = Betondata(img_dirs=img_dirs, transform=transforms.Compose([
         transforms.Lambda(ToTensor()),
         transforms.Lambda(normalize(33.24, 6.69)),
@@ -351,7 +354,7 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     ]))
     dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=1)
 
-    # CNNs
+    # Nets
     noise_dim = 200
     in_channels = 512
     dim = 100
@@ -374,7 +377,11 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
             print("No Discriminator loaded")
             pass
 
-    # Binary Cross Entropy Loss
+    # Loss + optimizers
+    lr = 0.0002
+    beta1 = 0.5
+    optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
+    optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
     criterion = nn.BCELoss()
 
     # Create batch of latent vectors that we will use to visualize the progression of the generator
@@ -383,12 +390,6 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     # Establish convention for real and fake labels during training
     real_label = 1.
     fake_label = 0.
-
-    # Optimizers for both G and D
-    lr = 0.0002
-    beta1 = 0.5
-    optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(beta1, 0.999))
-    optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(beta1, 0.999))
 
     # Training Loop
 
@@ -521,6 +522,6 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
 
 
 if __name__ == "__main__":
-    test_gan3d()
-    # train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
+    # test_gan3d()
+    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
     # inspect_netG("nets/netG_epoch_0_old")

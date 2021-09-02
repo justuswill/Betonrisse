@@ -107,5 +107,5 @@ if __name__ == "__main__":
     # cut("D:Data/Beton/Real-1/xy-npy/", "D:Data/Beton/Real-1/xyz-100-npy/", d=100)
     # cut("D:Data/Beton/HPC/xy-npy/", "D:Data/Beton/HPC/xyz-100-npy/", d=100)
     # cut("D:Data/Beton/NC/xy-npy/", "D:Data/Beton/NC/xyz-100-npy/", d=100)
-    convert_3d("D:Data/Beton/Synth/width1/input/crack_1_256_w1_1.tif", "D:Data/Beton/Synth/npy/")
-
+    for i in range(1, 9):
+        convert_3d("D:\Data\Beton\Synth\width1\input\crack_1_256_w1_%d.tif" % i, "D:Data/Beton/Synth/npy/")
