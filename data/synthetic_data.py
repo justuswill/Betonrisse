@@ -1,12 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
-from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms as transforms
+from torch.utils.data import Dataset
 
-from brownian_surface import generate_crack
-from noise import generate_fractal_noise_3d
-from data_tools import plot_batch, ToTensor, normalize, random_rotate_flip_3d
+from .brownian_surface import generate_crack
+from .noise import generate_fractal_noise_3d
 
 
 class Synthdata(Dataset):
@@ -84,25 +81,3 @@ def create_synthetic(dest_input, dest_label, size=5000):
         print(i)
         np.save(dest_input + "%d.npy" % i, x["X"])
         np.save(dest_label + "%d.npy" % i, x["y"])
-
-
-if __name__ == "__main__":
-    # create_synthetic("D:/Data/Beton/Synth/input/", "D:/Data/Beton/Synth/label/", size=1000)
-
-    data = Synthdata(n=100, size=32, empty=True, noise=True, octaves=1,
-                     transform=transforms.Compose([
-                         transforms.Lambda(ToTensor()),
-                         transforms.Lambda(random_rotate_flip_3d())
-                     ]),
-                     data_transform=transforms.Lambda(normalize(0.5, 1)))
-    dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=0)
-    # trainloader, testloader = train_test_dataloader(data, batch_size=8, shuffle=True, num_workers=0)
-
-    batch = next(iter(dataloader))
-    plot_batch(batch["X"], 2)
-    plot_batch(batch["y"], 2)
-    plot_batch(batch["X"], 1)
-    plot_batch(batch["y"], 1)
-    plot_batch(batch["X"], 0)
-    plot_batch(batch["y"], 0)
-    plt.show()

@@ -129,7 +129,7 @@ def generate_fractal_noise_3d(
 
     # Scale to range [0, 1]
     noise = noise / fraktal_range + 0.5
-    return noise
+    return noise.astype(np.float32)
 
 
 if __name__ == "__main__":
