@@ -10,7 +10,7 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from data import Betondata, Synthdata, ToTensor, random_rotate_flip_3d, normalize
+from data import Betondata, Betondataset, Synthdata, ToTensor, random_rotate_flip_3d, normalize
 from data import train_test_dataloader, plot_batch
 
 
@@ -95,15 +95,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Data
-    data = Betondata(img_dirs="D:/Data/Beton/Synth/input/", label_dirs="D:/Data/Beton/Synth/label/",
-                     binary_labels=True,
-                     transform=transforms.Compose([
-                         transforms.Lambda(ToTensor()),
-                         transforms.Lambda(random_rotate_flip_3d())
-                     ]),
-                     data_transform=transforms.Lambda(normalize(0.5, 1)))
-    # trainloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=0)
-    trainloader, testloader = train_test_dataloader(data, batch_size=4, shuffle=False, num_workers=1)
+    trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
     # batch = next(iter(trainloader))
     # plot_batch(batch["X"])
@@ -238,29 +230,11 @@ def inspect_net(path):
     net = Net(out_conv_channels=256).to(device)
     net.load_state_dict(torch.load(path, map_location=device))
 
-    # data = Synthdata(n=100, size=32, empty=True, binary_labels=True,
-    #                  transform=transforms.Compose([
-    #                      transforms.Lambda(ToTensor()),
-    #                      transforms.Lambda(random_rotate_flip_3d())
-    #                  ]),
-    #                  data_transform=transforms.Lambda(normalize(0.5, 1)))
-    # testloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=0)
-
-    # Data
-    data = Betondata(img_dirs="D:/Data/Beton/Synth/input/", label_dirs="D:/Data/Beton/Synth/label/",
-                     binary_labels=True,
-                     transform=transforms.Compose([
-                         transforms.Lambda(ToTensor()),
-                         transforms.Lambda(random_rotate_flip_3d())
-                     ]),
-                     data_transform=transforms.Lambda(normalize(0.5, 1)))
-    trainloader, testloader = train_test_dataloader(data, batch_size=4, shuffle=False, num_workers=1)
+    testloader = Betondataset("semisynth", test=0, binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
     metrics(net, testloader)
 
 
 if __name__ == "__main__":
-    # train_net(load="nets/netcnn", checkpoints=True, num_epochs=5)
-    inspect_net("nets/netcnn_epoch_5")
-
-    # wd = 0.01: 94/86/20/0, 94/97/9/0
+    train_net(load="nets/netcnn", checkpoints=True, num_epochs=30)
+    # inspect_net("nets/netcnn_epoch_5")

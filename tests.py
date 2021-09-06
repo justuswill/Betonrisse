@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 from data import create_synthetic, convert_3d, mean_std
-from data import plot_batch, ToTensor, normalize, random_rotate_flip_3d
+from data import plot_batch, ToTensor, normalize, random_rotate_flip_3d, resize
 from data import Betondata, Synthdata
 
 
@@ -36,11 +36,14 @@ def test_semisynthetic_data():
     #     for s in ["input", "label"]:
     #         convert_3d("D:/Data/Beton/Semi-Synth/width%d/%s/" % (w, s),
     #                    "D:/Data/Beton/Semi-Synth/w%d-npy-256/%s/" % (w, s))
+    # convert_3d("D:/Data/Beton/Semi-Synth/background/", "D:/Data/Beton/Semi-Synth/bg-npy-256/")
 
-    data = Betondata(img_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/input/" % w for w in [1, 3, 5]],
-                     label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/label/" % w for w in [1, 3, 5]],
+    data = Betondata(img_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/input/" % w for w in [3, 5]]
+                     + ["D:/Data/Beton/Semi-Synth/bg-npy-256/"],
+                     label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/label/" % w for w in [3, 5]],
                      transform=transforms.Compose([
                          transforms.Lambda(ToTensor()),
+                         transforms.Lambda(resize(100)),
                          transforms.Lambda(random_rotate_flip_3d())
                      ]),
                      data_transform=transforms.Lambda(normalize(30, 6.5)))

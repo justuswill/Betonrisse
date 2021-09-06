@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision.utils import make_grid
+import torch.nn.functional as F
 
 
 def plot_batch(x, acc=2):
@@ -19,7 +20,7 @@ def plot_batch(x, acc=2):
     slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
     plt.title("Training Images (%s)" % slice)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
-            x, 2, 2 + acc)[:, :, 0:80:10, :, :], 1, 2), (-1, 1, sz, sz)),
+            x, 2, 2 + acc)[:, :, 0:sz:(sz // 8), :, :], 1, 2), (-1, 1, sz, sz)),
             padding=2, normalize=True).cpu(), (1, 2, 0))
     plt.imshow(img)
     return img
@@ -40,6 +41,14 @@ class normalize:
 
     def __call__(self, t):
         return (t - self.mean) / self.std
+
+
+class resize:
+    def __init__(self, sz):
+        self.sz = sz
+
+    def __call__(self, t):
+        return torch.squeeze(F.interpolate(t[None, :], size=self.sz, mode="trilinear", align_corners=False), 0)
 
 
 class random_rotate_flip_xy:
@@ -116,7 +125,7 @@ def mean_std(data):
     print("mean: %.2f \\ std: %.2f" % (mean, std))
 
 
-def train_test_dataloader(data, test_split=0.2, shuffle=True, **kwargs):
+def train_test_dataloader(data, test_split=0.2, shuffle=False, **kwargs):
     """
     Create a train/test split of the dataset and create two dataloaders
     """
