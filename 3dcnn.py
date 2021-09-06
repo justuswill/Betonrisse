@@ -128,13 +128,14 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
     # Optimizer
     lr = 0.001
-    weight_decay = 0.1
+    weight_decay = 0.01
     beta1 = 0.9
     optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
 
     # Training loop
     losses = []
     iters = 0
+    loss_mean = 0
 
     print("Starting Training Loop...")
     for epoch in range(1, num_epochs + 1):
@@ -153,19 +154,22 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             optimizer.step()
 
             # Output training stats
+            loss_mean += loss.item()
+            losses.append(loss.item())
             if i % 5 == 0:
                 print('[%d/%d][%d/%d]\tLoss: %.4f'
-                      % (epoch, num_epochs, i, len(trainloader), loss.item()))
-            losses.append(loss.item())
+                      % (epoch, num_epochs, i, len(trainloader), loss_mean))
+                loss_mean = 0
 
             iters += 1
 
-        if not epoch == num_epochs:
-            metrics(net, testloader, plot=False)
+        metrics(net, testloader, plot=epoch == num_epochs)
 
         if checkpoints:
             # do checkpointing
             torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
+
+    metrics(net, testloader)
 
     plt.figure(figsize=(10, 5))
     plt.title("Loss During Training")
@@ -174,8 +178,6 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     plt.ylabel("Loss")
     plt.savefig("prog.png")
     plt.show()
-
-    metrics(net, testloader)
 
 
 def metrics(net, testloader, plot=True):
@@ -188,10 +190,12 @@ def metrics(net, testloader, plot=True):
     pos_out = []
     neg_out = []
     tp, tn, fp, fn = 0, 0, 0, 0
+
+    net.eval()
     with torch.no_grad():
         for batch in testloader:
             inputs, labels = batch["X"].to(device), batch["y"].to(device)
-            outputs = net(inputs)
+            outputs = torch.sigmoid(net(inputs))
             predicted = (outputs > cutoff).float().view(-1)
 
             pos_out += outputs[labels == 1].view(-1).tolist()
@@ -201,6 +205,16 @@ def metrics(net, testloader, plot=True):
             fp += ((predicted == 1.0) & (labels == 0.0)).sum().item()
             fn += ((predicted == 0.0) & (labels == 1.0)).sum().item()
 
+            if ((predicted == 1.0) & (labels == 0.0)).sum().item() > 0:
+                print("fp %s" % batch["id"][((predicted == 1.0) & (labels == 0.0))])
+                # if plot:
+                #     plot_batch(inputs[((predicted == 1.0) & (labels == 0.0))])
+            if ((predicted == 0.0) & (labels == 1.0)).sum().item() > 0:
+                print("fn %s" % batch["id"][((predicted == 0.0) & (labels == 1.0))])
+                # if plot:
+                #     plot_batch(inputs[((predicted == 0.0) & (labels == 1.0))])
+    net.train()
+
     total = tp + tn + fp + fn
     recall = 100 * tp / (tp + fn)
     precision = 100 * tp / (tp + fp)
@@ -209,13 +223,8 @@ def metrics(net, testloader, plot=True):
           (total, tp, tn, fp, fn, acc, precision, recall))
 
     if plot:
-        bins = np.linspace(-2, 2, 40)
-        plt.hist(pos_out, bins, alpha=0.5, label="pos")
-        plt.hist(neg_out, bins, alpha=0.5, label="neg")
-        plt.legend()
-
         plt.figure()
-        bins = np.linspace(-5, 5, 40)
+        bins = np.linspace(0, 1, 40)
         plt.hist(pos_out, bins, alpha=0.5, label="pos")
         plt.hist(neg_out, bins, alpha=0.5, label="neg")
         plt.legend()
@@ -253,3 +262,5 @@ def inspect_net(path):
 if __name__ == "__main__":
     # train_net(load="nets/netcnn", checkpoints=True, num_epochs=5)
     inspect_net("nets/netcnn_epoch_5")
+
+    # wd = 0.01: 94/86/20/0, 94/97/9/0

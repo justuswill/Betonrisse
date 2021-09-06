@@ -43,16 +43,21 @@ def convert_3d(img_path, dest):
     """
     read tif and convert to .npy file
     """
-    image_stack = Image.open(img_path)
+    if img_path.endswith("tif"):
+        img_names = [img_path]
+    else:
+        img_names = sorted(map(lambda k: img_path + k, filter(lambda k: k.endswith("tif"), os.listdir(img_path))))
 
-    image_list = []
-    for i in range(image_stack.n_frames):
-        # read
-        image_stack.seek(i)
-        image_list += [np.array(image_stack)]
+    for img_name in img_names:
+        with Image.open(img_name) as image_stack:
+            image_list = []
+            for i in range(image_stack.n_frames):
+                # read
+                image_stack.seek(i)
+                image_list += [np.array(image_stack)]
 
-    # save
-    np.save(dest + img_path.split("/")[-1][:-4] + ".npy", np.stack(image_list, axis=2))
+            # save
+            np.save(dest + img_name.split("/")[-1][:-4] + ".npy", np.stack(image_list, axis=2))
 
 
 def split_overlap(arr, d, axis, overlap=True):

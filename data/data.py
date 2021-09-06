@@ -28,7 +28,7 @@ class Betondata(Dataset):
 
         self.img_names = [dir + f for dir in img_dirs for f in os.listdir(dir)]
         self.img_names = list(filter(lambda k: k.endswith("npy"), self.img_names))
-        self.img_names = sorted(self.img_names, key=lambda s: int(s.split("/")[-1][:-4]))
+        # self.img_names = sorted(self.img_names, key=lambda s: int(s.split("/")[-1][:-4]))
         self.transform = transform
         self.data_transform = data_transform
 
@@ -57,11 +57,13 @@ class Betondata(Dataset):
         if self.data_transform is not None:
             sample = self.data_transform(sample)
 
-        if not self.labels:
-            return {"X": sample}
-        else:
+        out = {"X": sample, "id": idx}
+
+        if self.labels:
             if self.label_names[idx] is not None:
                 label = np.load(self.label_names[idx])
+                if len(label.shape) < 4:
+                    label = label[np.newaxis, :, :, :]
                 if self.binary_labels:
                     label = float(np.any(label))
                 elif self.transform is not None:
@@ -72,28 +74,6 @@ class Betondata(Dataset):
                     label = 0.0
                 else:
                     label = np.zeros(sample.shape, sample.dtype)
-            return {"X": sample, "y": label}
+            out["y"] = label
 
-
-if __name__ == "__main__":
-    data = Betondata(img_dirs="D:Data/Beton/HPC/riss/",
-                     transform=transforms.Compose([
-                         transforms.Lambda(ToTensor()),
-                         transforms.Lambda(normalize(33.24, 6.69)),
-                         transforms.Lambda(random_rotate_flip_3d())
-                     ]))
-    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
-
-    # data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/",
-    #                  transform=transforms.Lambda(normalize(32.69, 4.98)))
-
-    for batch in dataloader:
-       batch = batch["X"]
-       plot_batch(batch, 2)
-       plt.show()
-
-    # batch = next(iter(dataloader))["X"]
-    # plot_batch(batch, 2)
-    # plot_batch(batch, 1)
-    # plot_batch(batch, 0)
-    # plt.show()
+        return out

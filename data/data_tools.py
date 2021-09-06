@@ -14,11 +14,12 @@ def plot_batch(x, acc=2):
     :return image that can be shown with imshow later
     """
     plt.figure(figsize=(8, 8))
+    sz = x.shape[-1]
     plt.axis("off")
     slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
     plt.title("Training Images (%s)" % slice)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
-            x, 2, 2 + acc)[:, :, 0:80:10, :, :], 1, 2), (-1, 1, 100, 100)),
+            x, 2, 2 + acc)[:, :, 0:80:10, :, :], 1, 2), (-1, 1, sz, sz)),
             padding=2, normalize=True).cpu(), (1, 2, 0))
     plt.imshow(img)
     return img
@@ -32,6 +33,7 @@ class ToTensor:
 class normalize:
     # HPC/riss: 33.24, 6.69
     # HPC:      32.69, 4.98
+    # Semi:     30,    6.5
     def __init__(self, mean, std):
         self.mean = mean
         self.std = std
