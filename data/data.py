@@ -1,7 +1,7 @@
 import os
 import numpy as np
 
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
 from .data_tools import ToTensor, normalize, random_rotate_flip_3d, resize, train_test_dataloader
 
@@ -99,16 +99,22 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                          ]),
                          data_transform=transforms.Lambda(normalize(0.5, 1)))
     elif type == "semisynth":
-        data = Betondata(img_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/input/" % w for w in [3, 5]]
-                                  + ["D:/Data/Beton/Semi-Synth/bg-npy-256/"],
-                         label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/label/" % w for w in [3, 5]],
+        data = Betondata(img_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-100/input%s/" %
+                                   (w, s) for w in [1, 3, 5] for s in ["", "2"]],
+                         label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-100/label%s/" %
+                                     (w, s) for w in [1, 3, 5] for s in ["", "2"]],
                          binary_labels=binary_labels,
                          transform=transforms.Compose([
                              transforms.Lambda(ToTensor()),
-                             transforms.Lambda(resize(100)),
                              transforms.Lambda(random_rotate_flip_3d())
                          ]),
-                         data_transform=transforms.Lambda(normalize(30, 6.5)))
+                         data_transform=transforms.Lambda(normalize(0.11, 1)))
+        kwargs.pop("shuffle")
+        # fixed test = 0.2
+        test = [x for a, b in [(0, 160), (200, 280), (300, 460), (500, 580), (600, 760), (800, 880)]
+                for x in list(range(a, b))]
+        train = [x for x in range(900) if x not in test]
+        return [DataLoader(data, sampler=SubsetRandomSampler(idxs), **kwargs) for idxs in [train, test]]
     elif type == "hpc":
         data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/", binary_labels=binary_labels,
                          transform=transforms.Compose([

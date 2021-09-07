@@ -20,7 +20,7 @@ def plot_batch(x, acc=2):
     slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
     plt.title("Training Images (%s)" % slice)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
-            x, 2, 2 + acc)[:, :, 0:sz:(sz // 8), :, :], 1, 2), (-1, 1, sz, sz)),
+            x, 2, 2 + acc)[:, :, 0:sz:(sz // 7), :, :], 1, 2), (-1, 1, sz, sz)),
             padding=2, normalize=True).cpu(), (1, 2, 0))
     plt.imshow(img)
     return img
@@ -49,6 +49,15 @@ class resize:
 
     def __call__(self, t):
         return torch.squeeze(F.interpolate(t[None, :], size=self.sz, mode="trilinear", align_corners=False), 0)
+
+
+class randomCrop:
+    def __init__(self, sz):
+        self.sz = sz
+
+    def __call__(self, t):
+        s = np.random.choice(t.shape[-1] - self.sz, size=3)
+        return t[:, s[0]:s[0] + self.sz, s[1]:s[1] + self.sz, s[2]:s[2] + self.sz]
 
 
 class random_rotate_flip_xy:

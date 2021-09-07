@@ -7,7 +7,7 @@ from .noise import generate_fractal_noise_3d
 
 
 class Synthdata(Dataset):
-    def __init__(self, n=128, size=1000, noise=True, snr=2, empty=False, cached=True, binary_labels=False,
+    def __init__(self, n=128, size=1000, noise=True, snr=2, empty=True, cached=True, binary_labels=False,
                  transform=None, data_transform=None, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces and optional fractal noise
@@ -78,6 +78,8 @@ class Synthdata(Dataset):
 def create_synthetic(dest_input, dest_label, size=5000):
     data = Synthdata(n=100, size=size, empty=True, noise=True)
     for i, x in enumerate(data):
+        if i >= size:
+            break
         print(i)
         np.save(dest_input + "%d.npy" % i, x["X"])
         np.save(dest_label + "%d.npy" % i, x["y"])

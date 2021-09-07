@@ -98,9 +98,10 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
     # batch = next(iter(trainloader))
+    # print(batch["y"])
+    # # plot_batch(batch["y"])
     # plot_batch(batch["X"])
     # plt.show()
-    # print(batch["y"])
 
     # Net
     # todo: smaller batch or more out_conv?
@@ -115,13 +116,13 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     # Loss
     # todo: weight FN more with pos_weight > 1
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    pos_weight = 1
-    criterion = nn.BCEWithLogitsLoss()
+    pos_weight = 11/36 * 1.0
+    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
 
     # Optimizer
     lr = 0.001
-    weight_decay = 0.01
-    beta1 = 0.9
+    weight_decay = 0.1
+    beta1 = 0.8
     optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
 
     # Training loop
@@ -161,8 +162,6 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             # do checkpointing
             torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
 
-    metrics(net, testloader)
-
     plt.figure(figsize=(10, 5))
     plt.title("Loss During Training")
     plt.plot(losses)
@@ -183,6 +182,14 @@ def metrics(net, testloader, plot=True):
     neg_out = []
     tp, tn, fp, fn = 0, 0, 0, 0
 
+    # Find 8 samples of FP and FN
+    examples_fp = torch.zeros([8, 1, 100, 100, 100])
+    examples_fn = torch.zeros([8, 1, 100, 100, 100])
+    fp_idx = np.zeros([8])
+    fn_idx = np.zeros([8])
+    fp_n = 0
+    fn_n = 0
+
     net.eval()
     with torch.no_grad():
         for batch in testloader:
@@ -197,24 +204,32 @@ def metrics(net, testloader, plot=True):
             fp += ((predicted == 1.0) & (labels == 0.0)).sum().item()
             fn += ((predicted == 0.0) & (labels == 1.0)).sum().item()
 
-            if ((predicted == 1.0) & (labels == 0.0)).sum().item() > 0:
-                print("fp %s" % batch["id"][((predicted == 1.0) & (labels == 0.0))])
-                # if plot:
-                #     plot_batch(inputs[((predicted == 1.0) & (labels == 0.0))])
-            if ((predicted == 0.0) & (labels == 1.0)).sum().item() > 0:
-                print("fn %s" % batch["id"][((predicted == 0.0) & (labels == 1.0))])
-                # if plot:
-                #     plot_batch(inputs[((predicted == 0.0) & (labels == 1.0))])
+            if plot:
+                fp_ths = ((predicted == 1.0) & (labels == 0.0))
+                fn_ths = ((predicted == 0.0) & (labels == 1.0))
+                if fp_n < 8 and fp_ths.sum().item() > 0:
+                    examples_fp[fp_n:min(8, fp_n + fp_ths.sum().item())] = inputs[fp_ths]
+                    fp_idx[fp_n:min(8, fp_n + fp_ths.sum().item())] = batch["id"][fp_ths]
+                    fp_n = min(8, fp_n + fp_ths.sum().item())
+                if fn_n < 8 and ((predicted == 0.0) & (labels == 1.0)).sum().item() > 0:
+                    examples_fn[fn_n:min(8, fn_n + fn_ths.sum().item())] = inputs[fn_ths]
+                    fn_idx[fn_n:min(8, fn_n + fn_ths.sum().item())] = batch["id"][fn_ths]
+                    fn_n = min(8, fn_n + fn_ths.sum().item())
     net.train()
 
     total = tp + tn + fp + fn
-    recall = 100 * tp / (tp + fn)
-    precision = 100 * tp / (tp + fp)
+    recall = 100 * tp / (tp + fn) if (tp + fn) > 0 else 0
+    precision = 100 * tp / (tp + fp) if (tp + fp) > 0 else 0
     acc = 100 * (tp + tn) / total
     print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\nAccuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%' %
           (total, tp, tn, fp, fn, acc, precision, recall))
 
     if plot:
+        print(fp_idx, fn_idx)
+        plot_batch(examples_fn)
+        plot_batch(examples_fp)
+        plt.show()
+
         plt.figure()
         bins = np.linspace(0, 1, 40)
         plt.hist(pos_out, bins, alpha=0.5, label="pos")
@@ -230,11 +245,11 @@ def inspect_net(path):
     net = Net(out_conv_channels=256).to(device)
     net.load_state_dict(torch.load(path, map_location=device))
 
-    testloader = Betondataset("semisynth", test=0, binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
+    trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
     metrics(net, testloader)
 
 
 if __name__ == "__main__":
-    train_net(load="nets/netcnn", checkpoints=True, num_epochs=30)
-    # inspect_net("nets/netcnn_epoch_5")
+    # train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=10)
+    inspect_net("nets/netcnn_s_epoch_10")
