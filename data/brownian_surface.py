@@ -91,6 +91,7 @@ def generate_crack(n=100, width=3, H=0.99, sigma=0.5):
     :param n: size of output
     :param sigma: label smoothing with a gaussian filter, set to 0 for no smoothing
     """
+    width = np.random.choice(width) if hasattr(width, "__getitem__") else width
     gt = np.zeros([n, n, n])
     field = brownian_surface(2*n, H)
 
@@ -130,7 +131,7 @@ def generate_crack(n=100, width=3, H=0.99, sigma=0.5):
 
 
 if __name__ == "__main__":
-    img = crack(width=3, n=100)
+    img = generate_crack(width=3, n=100)
     for i in range(0, 100, 5):
         plt.imshow(img[i, :, :], cmap='Greys')
         plt.pause(0.1)

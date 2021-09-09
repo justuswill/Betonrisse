@@ -1,4 +1,5 @@
-from .data import Betondata, Betondataset
+from .presets import Betondataset
+from .data import Betondata
 from .synthetic_data import Synthdata, create_synthetic
 from .semisynthetic_data import SemiSynthdata, create_semisynthetic
 from .data_tools import ToTensor, normalize, random_rotate_flip_3d, random_rotate_flip_xy, resize, randomCrop

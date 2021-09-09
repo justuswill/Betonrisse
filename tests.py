@@ -67,7 +67,7 @@ def test_semisynthetic_data():
     #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input2/" % w,
     #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label2/" % w, size=100, width=w, num_cracks=2)
 
-    data = SemiSynthdata(n=100, size=1000, empty=True, width=3, num_cracks=1,
+    data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
                          transform=transforms.Lambda(random_rotate_flip_3d())
                          # data_transform=transforms.Lambda(normalize(0.5, 1))
                          )

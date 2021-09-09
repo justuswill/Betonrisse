@@ -1,6 +1,8 @@
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams['animation.ffmpeg_path'] ='D:\\ffmpeg\\bin\\ffmpeg.exe'
+from matplotlib.animation import FFMpegWriter
 
 import torch
 import torch.nn as nn
@@ -95,13 +97,18 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Data
-    trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
+    trainloader, testloader = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
     # batch = next(iter(trainloader))
     # print(batch["y"])
     # # plot_batch(batch["y"])
     # plot_batch(batch["X"])
     # plt.show()
+
+    # Animate
+    fig, anim_ax = plt.subplots(figsize=(8, 5))
+    Writer = FFMpegWriter(fps=5)
+    Writer.setup(fig, "cnn_progress.mp4", dpi=100)
 
     # Net
     # todo: smaller batch or more out_conv?
@@ -116,13 +123,13 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     # Loss
     # todo: weight FN more with pos_weight > 1
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    pos_weight = 11/36 * 1.0
+    pos_weight = 1 * 1.0
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
 
     # Optimizer
     lr = 0.001
     weight_decay = 0.1
-    beta1 = 0.8
+    beta1 = 0.9
     optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
 
     # Training loop
@@ -156,11 +163,13 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
             iters += 1
 
-        metrics(net, testloader, plot=epoch == num_epochs)
-
         if checkpoints:
             # do checkpointing
             torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
+
+        metrics(net, testloader, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
+
+    Writer.finish()
 
     plt.figure(figsize=(10, 5))
     plt.title("Loss During Training")
@@ -171,9 +180,11 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     plt.show()
 
 
-def metrics(net, testloader, plot=True):
+def metrics(net, testloader, plot=True, anim=None, criterion=None):
     """
     Compute accuracy, recall, precision etc of a net on a test set
+
+    :param anim: (Writer, ax): plot on ax and grab frame.
     """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -189,6 +200,7 @@ def metrics(net, testloader, plot=True):
     fn_idx = np.zeros([8])
     fp_n = 0
     fn_n = 0
+    loss = 0
 
     net.eval()
     with torch.no_grad():
@@ -196,6 +208,9 @@ def metrics(net, testloader, plot=True):
             inputs, labels = batch["X"].to(device), batch["y"].to(device)
             outputs = torch.sigmoid(net(inputs))
             predicted = (outputs > cutoff).float().view(-1)
+
+            if criterion is not None:
+                loss += 1 / len(testloader) * criterion(outputs.view(-1), labels).mean().item()
 
             pos_out += outputs[labels == 1].view(-1).tolist()
             neg_out += outputs[labels == 0].view(-1).tolist()
@@ -208,12 +223,12 @@ def metrics(net, testloader, plot=True):
                 fp_ths = ((predicted == 1.0) & (labels == 0.0))
                 fn_ths = ((predicted == 0.0) & (labels == 1.0))
                 if fp_n < 8 and fp_ths.sum().item() > 0:
-                    examples_fp[fp_n:min(8, fp_n + fp_ths.sum().item())] = inputs[fp_ths]
-                    fp_idx[fp_n:min(8, fp_n + fp_ths.sum().item())] = batch["id"][fp_ths]
+                    examples_fp[fp_n:min(8, fp_n + fp_ths.sum().item())] = inputs[fp_ths][0:8-fp_n]
+                    fp_idx[fp_n:min(8, fp_n + fp_ths.sum().item())] = batch["id"][fp_ths][0:8-fp_n]
                     fp_n = min(8, fp_n + fp_ths.sum().item())
                 if fn_n < 8 and ((predicted == 0.0) & (labels == 1.0)).sum().item() > 0:
-                    examples_fn[fn_n:min(8, fn_n + fn_ths.sum().item())] = inputs[fn_ths]
-                    fn_idx[fn_n:min(8, fn_n + fn_ths.sum().item())] = batch["id"][fn_ths]
+                    examples_fn[fn_n:min(8, fn_n + fn_ths.sum().item())] = inputs[fn_ths][0:8-fn_n]
+                    fn_idx[fn_n:min(8, fn_n + fn_ths.sum().item())] = batch["id"][fn_ths][0:8-fn_n]
                     fn_n = min(8, fn_n + fn_ths.sum().item())
     net.train()
 
@@ -223,6 +238,17 @@ def metrics(net, testloader, plot=True):
     acc = 100 * (tp + tn) / total
     print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\nAccuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%' %
           (total, tp, tn, fp, fn, acc, precision, recall))
+    if criterion is not None:
+        print("Loss: %.2f" % loss)
+
+    if anim is not None:
+        bins = np.linspace(0, 1, 40)
+        Writer, ax = anim
+        ax.clear()
+        ax.hist(pos_out, bins, alpha=0.5, label="pos")
+        ax.hist(neg_out, bins, alpha=0.5, label="neg")
+        ax.legend()
+        Writer.grab_frame()
 
     if plot:
         print(fp_idx, fn_idx)
@@ -251,5 +277,9 @@ def inspect_net(path):
 
 
 if __name__ == "__main__":
-    # train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=10)
-    inspect_net("nets/netcnn_s_epoch_10")
+    train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=5)
+    # inspect_net("nets/netcnn_s_epoch_18")
+
+    """
+    0.1 0.8 363 222 120 15
+    """
