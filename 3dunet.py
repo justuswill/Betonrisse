@@ -18,8 +18,8 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim as optim
 
-from data.data import Betondata
-from data.data_tools import ToTensor, normalize, random_rotate_flip_3d
+from data import Betondataset
+from loss import BinaryDiceLoss as DiceLoss
 
 
 """
@@ -180,6 +180,10 @@ def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
     :param num_epochs: number of epochs to train
     """
 
+    # limitations
+    conv_channels = 128  # 512
+    batch_size = 1  # 4
+
     # Seed
     seed = 123
     random.seed(seed)
@@ -188,73 +192,59 @@ def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if img_dirs is not None:
-        data = Betondata(img_dirs=img_dirs, transform=transforms.Compose([
-            transforms.Lambda(ToTensor()),
-            transforms.Lambda(normalize(33.24, 6.69)),
-            transforms.Lambda(random_rotate_flip_3d())
-        ]))
-    else:
-        data = Synthdata()
-    dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=1)
+    trainloader, testloader = Betondataset("semisynth-inf", binary_labels=True, batch_size=batch_size, num_workers=1)
 
     # CNNs
-    noise_dim = 200
-    in_channels = 512
-    dim = 100
-    netG = Generator(in_channels=512, out_dim=dim, out_channels=1, noise_dim=noise_dim).to(device)
-    netD = Discriminator(in_channels=1, dim=dim, out_conv_channels=in_channels).to(device)
-    netG.apply(weights_init)
-    netD.apply(weights_init)
+    net = Unet(in_channels=1, out_channels=conv_channels, model_depth=4).to(device)
 
     # Load state if possible
-    if loadG != '':
+    if load != '':
         try:
-            netG.load_state_dict(torch.load(loadG))
+            net.load_state_dict(torch.load(load))
         except FileNotFoundError:
             print("No Generator loaded")
             pass
-    if loadD != '':
-        try:
-            netD.load_state_dict(torch.load(loadD))
-        except FileNotFoundError:
-            print("No Discriminator loaded")
-            pass
 
-    net = Unet(in_channels=1, out_channels=512)
-    #optim = torch.optim.Adam(params=model.parameters(), lr=learning_rate)
-    #criterion = DiceLoss()
+    # Loss / Optimizer
+    criterion = DiceLoss()
+    lr = 0.001
+    weight_decay = 0.1
+    beta1 = 0.9
+    optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
 
-    # self.net.train()
-    pet_paths = data_paths_loader(self.data_dir, self.modalities[0])
-    print(pet_paths)
-    mask_paths = data_paths_loader(self.data_dir, self.modalities[1])
-    pets, masks = dataset_loader(pet_paths, mask_paths)
-    training_steps = len(pets) // self.batch_size
+    # Training loop
+    losses = []
+    iters = 0
+    loss_mean = 0
 
-    for epoch in range(self.no_epochs):
-        start_time = time.time()
-        train_losses, train_iou = 0, 0
-        for step in range(training_steps):
-            print("Training step {}".format(step))
+    print("Starting Training Loop...")
+    for epoch in range(num_epochs):
+        for i, data in enumerate(trainloader, 0):
+            inputs, labels = data["X"].to(device), data["y"].to(device)
 
-            x_batch, y_batch = batch_data_loader(pets, masks, iter_step=step, batch_size=self.batch_size)
-            x_batch = torch.from_numpy(x_batch).cuda()
-            y_batch = torch.from_numpy(y_batch).cuda()
+            # zero the parameter gradients
+            optimizer.zero_grad()
 
-            self.optimizer.zero_grad()
-
-            logits = self.net(x_batch)
-            y_batch = y_batch.type(torch.int8)
-            loss = self.criterion(logits, y_batch)
+            # forward + backward + optimize
+            outputs = net(inputs).view(-1)
+            loss = criterion(outputs, labels)
             loss.backward()
-            self.optimizer.step()
-            # train_iou += mean_iou(y_batch, logits)
-            train_losses += loss.item()
-        end_time = time.time()
-        print("Epoch {}, training loss {:.4f}, time {:.2f}".format(epoch, train_losses / training_steps,
-                                                                   end_time - start_time))
+            optimizer.step()
+
+            # Output training stats
+            loss_mean += loss.item()
+            losses.append(loss.item())
+            if i % 5 == 0:
+                print('[%d/%d][%d/%d]\tLoss: %.4f'
+                      % (epoch, num_epochs, i, len(trainloader), loss_mean))
+                loss_mean = 0
+
+            iters += 1
+
+        if checkpoints:
+            # do checkpointing
+            torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
 
 
 if __name__ == "__main__":
-    test_unet3d()
+    train_unet3d(load="nets/unet", checkpoints=True, num_epochs=10)

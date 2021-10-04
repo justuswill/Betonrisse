@@ -8,12 +8,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
 
-from data import Betondata, Betondataset, Synthdata, ToTensor, random_rotate_flip_3d, normalize
-from data import train_test_dataloader, plot_batch
+from data import Betondataset, plot_batch
 
 
 class Net(nn.Module):
@@ -24,12 +20,11 @@ class Net(nn.Module):
         conv2_channels = int(out_conv_channels / 4)
         conv3_channels = int(out_conv_channels / 2)
 
-        self.conv1 = nn.Conv3d(3, 6, 5)
         self.conv1 = nn.Sequential(
             nn.Conv3d(
                 in_channels=in_channels, out_channels=conv1_channels, kernel_size=4, stride=1, padding=1, bias=False
             ),
-            nn.BatchNorm3d(conv1_channels),
+            # nn.BatchNorm3d(conv1_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.conv2 = nn.Sequential(
@@ -37,7 +32,7 @@ class Net(nn.Module):
                 in_channels=conv1_channels, out_channels=conv2_channels, kernel_size=4,
                 stride=1, padding=1, bias=False
             ),
-            nn.BatchNorm3d(conv2_channels),
+            # nn.BatchNorm3d(conv2_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.conv3 = nn.Sequential(
@@ -45,7 +40,7 @@ class Net(nn.Module):
                 in_channels=conv2_channels, out_channels=conv3_channels, kernel_size=4,
                 stride=1, padding=1, bias=False
             ),
-            nn.BatchNorm3d(conv3_channels),
+            # nn.BatchNorm3d(conv3_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
         self.conv4 = nn.Sequential(
@@ -53,7 +48,7 @@ class Net(nn.Module):
                 in_channels=conv3_channels, out_channels=out_conv_channels, kernel_size=4,
                 stride=1, padding=1, bias=False
             ),
-            nn.BatchNorm3d(out_conv_channels),
+            # nn.BatchNorm3d(out_conv_channels),
             nn.LeakyReLU(0.2, inplace=True)
         )
 
@@ -120,13 +115,11 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             print("No parameters loaded")
             pass
 
-    # Loss
+    # Loss / Optimizer
     # todo: weight FN more with pos_weight > 1
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    pos_weight = 1 * 1.0
+    pos_weight = 1.0
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
-
-    # Optimizer
     lr = 0.001
     weight_decay = 0.1
     beta1 = 0.9
@@ -139,8 +132,6 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
     print("Starting Training Loop...")
     for epoch in range(1, num_epochs + 1):
-
-        running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             inputs, labels = data["X"].to(device), data["y"].to(device)
 
@@ -190,6 +181,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
 
     cutoff = 0.5
     pos_out = []
+
     neg_out = []
     tp, tn, fp, fn = 0, 0, 0, 0
 
@@ -277,8 +269,8 @@ def inspect_net(path):
 
 
 if __name__ == "__main__":
-    train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=5)
-    # inspect_net("nets/netcnn_s_epoch_18")
+    train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=20)
+    # inspect_net("nets/netcnn_s_epoch_5_epoch_19")
 
     """
     0.1 0.8 363 222 120 15
