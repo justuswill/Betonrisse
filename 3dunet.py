@@ -25,7 +25,7 @@ from loss import BinaryDiceLoss as DiceLoss
 """
 Network architecture based on paper
 https://arxiv.org/abs/1606.06650
-with code from
+with code adapted from
 https://github.com/JielongZ/3D-UNet-PyTorch-Implementation
 """
 
@@ -87,32 +87,38 @@ class EncoderBlock(nn.Module):
 
 
 class ConvTranspose(nn.Module):
-    def __init__(self, in_channels, out_channels, k_size=3, stride=2, padding=1, output_padding=1):
+    def __init__(self, in_channels, out_channels, k_size=3, stride=2, padding=1, output_padding=1, pad=0):
         super(ConvTranspose, self).__init__()
         self.conv3d_transpose = nn.ConvTranspose3d(in_channels=in_channels,
                                                    out_channels=out_channels,
                                                    kernel_size=k_size,
                                                    stride=stride,
                                                    padding=padding,
-                                                   output_padding=output_padding)
+                                                   output_padding=output_padding + pad)
 
     def forward(self, x):
         return self.conv3d_transpose(x)
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, out_channels, model_depth=4):
+    def __init__(self, out_channels, model_depth=4, out_dim=None):
+        """
+        :param force output dim (useful only when not a multiple of 2**depth
+        """
         super(DecoderBlock, self).__init__()
         self.num_conv_blocks = 2
         self.num_feat_maps = 16
         # user nn.ModuleDict() to store ops
         self.module_dict = nn.ModuleDict()
 
-        for depth in range(model_depth - 2, -1, -1):
+        extrapads = [out_dim % 2 ** d // 2 ** (d-1) for d in range(1, model_depth)] if out_dim is not None else\
+            [0] * model_depth
+
+        for depth in range(model_depth - 1, 0, -1):
             # print(depth)
-            feat_map_channels = 2 ** (depth + 1) * self.num_feat_maps
+            feat_map_channels = 2 ** depth * self.num_feat_maps
             # print(feat_map_channels * 4)
-            self.deconv = ConvTranspose(in_channels=feat_map_channels * 4, out_channels=feat_map_channels * 4)
+            self.deconv = ConvTranspose(in_channels=feat_map_channels * 4, out_channels=feat_map_channels * 4, pad=extrapads[depth-1])
             self.module_dict["deconv_{}".format(depth)] = self.deconv
             for i in range(self.num_conv_blocks):
                 if i == 0:
@@ -134,6 +140,7 @@ class DecoderBlock(nn.Module):
         for k, op in self.module_dict.items():
             if k.startswith("deconv"):
                 x = op(x)
+                print(k, x.shape, down_sampling_features[int(k[-1])].shape)
                 x = torch.cat((down_sampling_features[int(k[-1])], x), dim=1)
             elif k.startswith("conv"):
                 x = op(x)
@@ -144,10 +151,10 @@ class DecoderBlock(nn.Module):
 
 class Unet(nn.Module):
 
-    def __init__(self, in_channels, out_channels, model_depth=4, final_activation="sigmoid"):
+    def __init__(self, in_channels, out_channels, model_depth=4, final_activation="sigmoid", out_dim=None):
         super(Unet, self).__init__()
         self.encoder = EncoderBlock(in_channels=in_channels, model_depth=model_depth)
-        self.decoder = DecoderBlock(out_channels=out_channels, model_depth=model_depth)
+        self.decoder = DecoderBlock(out_channels=out_channels, model_depth=model_depth, out_dim=out_dim)
         if final_activation == "sigmoid":
             self.sigmoid = nn.Sigmoid()
         else:
@@ -162,8 +169,8 @@ class Unet(nn.Module):
 
 
 def test_unet3d():
-    dim = 64  # cube volume
-    net = Unet(in_channels=1, out_channels=512, model_depth=4)
+    dim = 50  # cube volume
+    net = Unet(in_channels=1, out_channels=512, model_depth=4, out_dim=50)
     noise = torch.rand(1, 1, dim, dim, dim)
 
     out = net(noise)
@@ -195,7 +202,7 @@ def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
     trainloader, testloader = Betondataset("semisynth-inf", binary_labels=True, batch_size=batch_size, num_workers=1)
 
     # CNNs
-    net = Unet(in_channels=1, out_channels=conv_channels, model_depth=4).to(device)
+    net = Unet(in_channels=1, out_channels=conv_channels, model_depth=4, out_dim=100).to(device)
 
     # Load state if possible
     if load != '':
@@ -247,4 +254,5 @@ def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
 
 
 if __name__ == "__main__":
-    train_unet3d(load="nets/unet", checkpoints=True, num_epochs=10)
+    test_unet3d()
+    # train_unet3d(load="nets/unet", checkpoints=True, num_epochs=10)
