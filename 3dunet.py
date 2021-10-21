@@ -176,6 +176,8 @@ def test_unet3d():
     out = net(noise)
     print("Output shape", out.shape)
 
+    summary(net, noise.size())
+
 
 def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
     """

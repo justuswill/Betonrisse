@@ -1,8 +1,8 @@
 import random
 import numpy as np
 import matplotlib.pyplot as plt
-plt.rcParams['animation.ffmpeg_path'] ='D:\\ffmpeg\\bin\\ffmpeg.exe'
 from matplotlib.animation import FFMpegWriter
+import time
 
 import torch
 import torch.nn as nn
@@ -11,61 +11,55 @@ import torch.optim as optim
 
 from data import Betondataset, plot_batch
 
+plt.rcParams['animation.ffmpeg_path'] = 'D:\\ffmpeg\\bin\\ffmpeg.exe'
+
 
 class Net(nn.Module):
-    def __init__(self, in_channels=1, dim=100, out_conv_channels=512):
+    def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None):
+        """
+        Define a standard CNN with <layer> blocks of convolution + pooling
+        and a final pooling layer with outdim ~ dim/2**(layers+extrapool)
+        """
         super().__init__()
+        # use channel sizes [1, 32, 64, 128, ...] and outdim ~ dim/16
+        if out_conv_channels is None:
+            out_conv_channels = 2 ** (4 + layers)
+        if extra_pool is None:
+            extra_pool = max(0, 4 - layers)
 
-        conv1_channels = int(out_conv_channels / 8)
-        conv2_channels = int(out_conv_channels / 4)
-        conv3_channels = int(out_conv_channels / 2)
+        # Convolutions - outdim = dim + (3 - kern)
+        self.layers = layers
+        conv_channels = [in_channels] + [int(out_conv_channels / 2**k) for k in range(self.layers - 1, -1, -1)]
+        for i in range(self.layers):
+            conv = nn.Sequential(
+                nn.Conv3d(
+                    in_channels=conv_channels[i], out_channels=conv_channels[i+1],
+                    kernel_size=4, stride=1, padding=1, bias=False
+                ),
+                nn.BatchNorm3d(conv_channels[i+1]),
+                nn.LeakyReLU(0.2, inplace=True)
+            )
+            self.add_module("conv%d" % i, conv)
 
-        self.conv1 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=in_channels, out_channels=conv1_channels, kernel_size=4, stride=1, padding=1, bias=False
-            ),
-            # nn.BatchNorm3d(conv1_channels),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
-        self.conv2 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=conv1_channels, out_channels=conv2_channels, kernel_size=4,
-                stride=1, padding=1, bias=False
-            ),
-            # nn.BatchNorm3d(conv2_channels),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
-        self.conv3 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=conv2_channels, out_channels=conv3_channels, kernel_size=4,
-                stride=1, padding=1, bias=False
-            ),
-            # nn.BatchNorm3d(conv3_channels),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
-        self.conv4 = nn.Sequential(
-            nn.Conv3d(
-                in_channels=conv3_channels, out_channels=out_conv_channels, kernel_size=4,
-                stride=1, padding=1, bias=False
-            ),
-            # nn.BatchNorm3d(out_conv_channels),
-            nn.LeakyReLU(0.2, inplace=True)
-        )
-
+        # Pooling - outdim = dim / 2
         self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+        self.final_pool = nn.MaxPool3d(kernel_size=2**(extra_pool + 1), stride=2**(extra_pool + 1))
 
-        f = lambda x: (x - 1) // 2
-        self.out_dim = f(f(f(f(dim))))
+        self.out_dim = dim
+        for _ in range(layers):
+            self.out_dim = (self.out_dim - 1) // 2
+        self.out_dim = self.out_dim // 2**extra_pool
 
         self.fc1 = nn.Linear(out_conv_channels * self.out_dim ** 3, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
 
     def forward(self, x):
-        x = self.pool(self.conv1(x))
-        x = self.pool(self.conv2(x))
-        x = self.pool(self.conv3(x))
-        x = self.pool(self.conv4(x))
+
+        for i in range(self.layers):
+            conv = getattr(self, "conv%d" % i)
+            pool = self.final_pool if i == self.layers - 1 else self.pool
+            x = pool(conv(x))
         x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -107,7 +101,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
     # Net
     # todo: smaller batch or more out_conv?
-    net = Net(out_conv_channels=256).to(device)
+    net = Net(layers=1).to(device)
     if load != '':
         try:
             net.load_state_dict(torch.load(load))
@@ -194,12 +188,15 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
     fn_n = 0
     loss = 0
 
+    dur = 0
     net.eval()
     with torch.no_grad():
         for batch in testloader:
             inputs, labels = batch["X"].to(device), batch["y"].to(device)
+            start = time.time()
             outputs = torch.sigmoid(net(inputs))
             predicted = (outputs > cutoff).float().view(-1)
+            dur += time.time() - start
 
             if criterion is not None:
                 loss += 1 / len(testloader) * criterion(outputs.view(-1), labels).mean().item()
@@ -223,13 +220,16 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
                     fn_idx[fn_n:min(8, fn_n + fn_ths.sum().item())] = batch["id"][fn_ths][0:8-fn_n]
                     fn_n = min(8, fn_n + fn_ths.sum().item())
     net.train()
+    print("Time: %g s (%g s / sample - %.1f s / 2k)" %
+          (dur, dur/len(testloader), dur/len(testloader)*(2000/100 * 1.5)**3))
 
     total = tp + tn + fp + fn
     recall = 100 * tp / (tp + fn) if (tp + fn) > 0 else 0
     precision = 100 * tp / (tp + fp) if (tp + fp) > 0 else 0
+    tnr = 100 * tn / (tn + fp) if (tn + fp) > 0 else 0
     acc = 100 * (tp + tn) / total
-    print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\nAccuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%' %
-          (total, tp, tn, fp, fn, acc, precision, recall))
+    print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\nAccuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%\nTNR: %.2f %%' %
+          (total, tp, tn, fp, fn, acc, precision, recall, tnr))
     if criterion is not None:
         print("Loss: %.2f" % loss)
 
@@ -260,17 +260,17 @@ def inspect_net(path):
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    net = Net(out_conv_channels=256).to(device)
+    net = Net(layers=1).to(device)
     net.load_state_dict(torch.load(path, map_location=device))
 
     trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
-    metrics(net, testloader)
+    metrics(net, testloader, plot=False)
 
 
 if __name__ == "__main__":
-    train_net(load="nets/netcnn_s", checkpoints=True, num_epochs=20)
-    # inspect_net("nets/netcnn_s_epoch_5_epoch_19")
+    # train_net(load="nets/netcnn_l1r", checkpoints=True, num_epochs=8)
+    inspect_net("nets/netcnn_l1r_epoch_8")
 
     """
     0.1 0.8 363 222 120 15
