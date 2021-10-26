@@ -33,6 +33,7 @@ class SemiSynthdata(Dataset):
         :param kwargs: args for the brownian surface (i.e. crack simulation)
         """
 
+        # max: 217, mean: 30.47, std: 5.91
         bg = Betondata(img_dirs="D:/Data/Beton/Semi-Synth/bg-npy-256/",
                        transform=transforms.Compose([
                             transforms.Lambda(ToTensor()),
@@ -72,7 +73,9 @@ class SemiSynthdata(Dataset):
             label = 1 - sample
 
         noise = next(self.noise_iter)
-        sample = torch.clamp(torch.squeeze(noise["X"], 0) / 255 * sample, max=1)
+        # todo: add perlin noise?
+        air = 12 + 2 * torch.randn(sample.shape)
+        sample = torch.clamp((torch.squeeze(noise["X"], 0) * sample + air * (1 - sample)) / 255, max=1)
 
         if self.transform is not None:
             sample = self.transform(sample)

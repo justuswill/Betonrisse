@@ -83,6 +83,16 @@ def test_semisynthetic_data():
     plt.show()
 
 
+def test_data():
+    from data import data_max, Betondata, mean_std, data_hist
+
+    dataset = SemiSynthdata(n=100, size=250, width=[1, 3, 5], num_cracks=[0, 0, 1, 2])
+    data_hist(dataset, mult=255)
+    # data_max(dataset)
+
+
 if __name__ == "__main__":
     # test_synthetic_data()
-    test_semisynthetic_data()
+    # test_semisynthetic_data()
+
+    test_data()

@@ -100,7 +100,6 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     Writer.setup(fig, "cnn_progress.mp4", dpi=100)
 
     # Net
-    # todo: smaller batch or more out_conv?
     net = Net(layers=1).to(device)
     if load != '':
         try:
@@ -110,9 +109,8 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             pass
 
     # Loss / Optimizer
-    # todo: weight FN more with pos_weight > 1
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    pos_weight = 1.0
+    pos_weight = 1
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
     lr = 0.001
     weight_decay = 0.1
@@ -153,6 +151,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
 
         metrics(net, testloader, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
+        # metrics(net, testloader, plot=True, criterion=criterion)
 
     Writer.finish()
 
@@ -228,7 +227,8 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
     precision = 100 * tp / (tp + fp) if (tp + fp) > 0 else 0
     tnr = 100 * tn / (tn + fp) if (tn + fp) > 0 else 0
     acc = 100 * (tp + tn) / total
-    print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\nAccuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%\nTNR: %.2f %%' %
+    print('On the %d test images\nTP|TN|FP|FN: %d %d %d %d\n'
+          'Accuracy: %.2f %%\nPrecision: %.2f %%\nRecall: %.2f %%\nTNR: %.2f %%' %
           (total, tp, tn, fp, fn, acc, precision, recall, tnr))
     if criterion is not None:
         print("Loss: %.2f" % loss)
@@ -265,13 +265,16 @@ def inspect_net(path):
 
     trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
 
-    metrics(net, testloader, plot=False)
+    metrics(net, testloader, plot=True)
 
 
 if __name__ == "__main__":
-    # train_net(load="nets/netcnn_l1r", checkpoints=True, num_epochs=8)
-    inspect_net("nets/netcnn_l1r_epoch_8")
+    train_net(load="nets/netcnn_l1w", checkpoints=True, num_epochs=10)
+    # inspect_net("nets/netcnn_l1p2_epoch_5")
 
     """
-    0.1 0.8 363 222 120 15
+    l2p -         / 99.7-100
+    l1p -         / ?100-100
+    l1  - 223.4 s / 99.2-100
+    l2  - 387.8 s / 100-100
     """

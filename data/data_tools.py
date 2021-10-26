@@ -134,6 +134,43 @@ def mean_std(data):
     print("mean: %.2f \\ std: %.2f" % (mean, std))
 
 
+def data_max(data):
+    """
+    compute max of a dataset
+    """
+    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
+
+    # Compute mean and std
+    max = 0
+    for i, batch in enumerate(dataloader):
+        batch_max = batch["X"].max().item()
+        if batch_max > max:
+            max = batch_max
+        if i % 50:
+            print("%.2f %% - %.2f" % (100 * i / len(dataloader), max))
+    print(max)
+
+
+def data_hist(data, mult=1):
+    """
+    compute max of a dataset
+    """
+    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
+
+    bins = np.arange(0, 256)
+    hist = np.zeros(bins.shape)
+
+    # Compute mean and std
+    for i, batch in enumerate(dataloader):
+        array = mult * np.array(batch["X"])
+        hist += np.bincount(array.reshape(-1).astype(np.int), minlength=256)
+        if i % 50:
+            print("%.2f %%" % (100 * i / len(dataloader)))
+    plt.bar(bins, hist, width=1)
+    plt.yscale("log")
+    plt.show()
+
+
 def train_test_dataloader(data, test_split=0.2, shuffle=False, **kwargs):
     """
     Create a train/test split of the dataset and create two dataloaders
