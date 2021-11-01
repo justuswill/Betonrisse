@@ -40,10 +40,9 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
         train = [x for x in range(900) if x not in test]
         return [DataLoader(data, sampler=SubsetRandomSampler(idxs), **kwargs) for idxs in [train, test]]
     elif type == "semisynth-inf":
-        data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
+        data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 1, 2],
                              binary_labels=binary_labels,
-                             transform=transforms.Lambda(random_rotate_flip_3d()),
-                             data_transform=transforms.Lambda(normalize(0.11, 1))
+                             transform=transforms.Lambda(random_rotate_flip_3d())
                )
     elif type == "hpc":
         # max: 206

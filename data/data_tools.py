@@ -151,7 +151,7 @@ def data_max(data):
     print(max)
 
 
-def data_hist(data, mult=1):
+def data_hist(data, mult=1, ax=None):
     """
     compute max of a dataset
     """
@@ -166,9 +166,11 @@ def data_hist(data, mult=1):
         hist += np.bincount(array.reshape(-1).astype(np.int), minlength=256)
         if i % 50:
             print("%.2f %%" % (100 * i / len(dataloader)))
-    plt.bar(bins, hist, width=1)
-    plt.yscale("log")
-    plt.show()
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.bar(bins, hist, width=1)
+    ax.set_yscale("log")
 
 
 def train_test_dataloader(data, test_split=0.2, shuffle=False, **kwargs):

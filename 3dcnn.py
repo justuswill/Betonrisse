@@ -15,7 +15,7 @@ plt.rcParams['animation.ffmpeg_path'] = 'D:\\ffmpeg\\bin\\ffmpeg.exe'
 
 
 class Net(nn.Module):
-    def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None):
+    def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None, dropout=0):
         """
         Define a standard CNN with <layer> blocks of convolution + pooling
         and a final pooling layer with outdim ~ dim/2**(layers+extrapool)
@@ -27,7 +27,7 @@ class Net(nn.Module):
         if extra_pool is None:
             extra_pool = max(0, 4 - layers)
 
-        # Convolutions - outdim = dim + (3 - kern)
+        # Convolutions with Batch Normalization - outdim = dim + (3 - kern)
         self.layers = layers
         conv_channels = [in_channels] + [int(out_conv_channels / 2**k) for k in range(self.layers - 1, -1, -1)]
         for i in range(self.layers):
@@ -50,9 +50,10 @@ class Net(nn.Module):
             self.out_dim = (self.out_dim - 1) // 2
         self.out_dim = self.out_dim // 2**extra_pool
 
-        self.fc1 = nn.Linear(out_conv_channels * self.out_dim ** 3, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 1)
+        # Linear with Dropout in all but last layer
+        self.fc1 = nn.Sequential(nn.Linear(out_conv_channels * self.out_dim ** 3, 128), nn.Dropout(p=dropout))
+        self.fc2 = nn.Sequential(nn.Linear(128, 64), nn.Dropout(p=dropout))
+        self.fc3 = nn.Sequential(nn.Linear(64, 1), nn.Dropout(p=0))
 
     def forward(self, x):
 
@@ -67,7 +68,7 @@ class Net(nn.Module):
         return x
 
 
-def train_net(load="", checkpoints=True, num_epochs=5):
+def train_net(net, tain, test, load="", checkpoints=True, num_epochs=5):
     """
     Train a Classifier to generate more data
 
@@ -85,22 +86,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    # Data
-    trainloader, testloader = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-
-    # batch = next(iter(trainloader))
-    # print(batch["y"])
-    # # plot_batch(batch["y"])
-    # plot_batch(batch["X"])
-    # plt.show()
-
-    # Animate
-    fig, anim_ax = plt.subplots(figsize=(8, 5))
-    Writer = FFMpegWriter(fps=5)
-    Writer.setup(fig, "cnn_progress.mp4", dpi=100)
-
-    # Net
-    net = Net(layers=1).to(device)
+    # Load net
     if load != '':
         try:
             net.load_state_dict(torch.load(load))
@@ -110,12 +96,18 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
     # Loss / Optimizer
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
+    # pos/all is 2 for semisynth, so basically pos_weight = 2
     pos_weight = 1
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
     lr = 0.001
     weight_decay = 0.1
     beta1 = 0.9
     optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
+
+    # Animate
+    fig, anim_ax = plt.subplots(figsize=(8, 5))
+    Writer = FFMpegWriter(fps=5)
+    Writer.setup(fig, "cnn_progress.mp4", dpi=100)
 
     # Training loop
     losses = []
@@ -124,7 +116,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
 
     print("Starting Training Loop...")
     for epoch in range(1, num_epochs + 1):
-        for i, data in enumerate(trainloader, 0):
+        for i, data in enumerate(train, 0):
             inputs, labels = data["X"].to(device), data["y"].to(device)
 
             # zero the parameter gradients
@@ -141,7 +133,7 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             losses.append(loss.item())
             if i % 5 == 0:
                 print('[%d/%d][%d/%d]\tLoss: %.4f'
-                      % (epoch, num_epochs, i, len(trainloader), loss_mean))
+                      % (epoch, num_epochs, i, len(train), loss_mean))
                 loss_mean = 0
 
             iters += 1
@@ -150,8 +142,8 @@ def train_net(load="", checkpoints=True, num_epochs=5):
             # do checkpointing
             torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
 
-        metrics(net, testloader, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
-        # metrics(net, testloader, plot=True, criterion=criterion)
+        metrics(net, test, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
+        # metrics(net, test, plot=True, criterion=criterion)
 
     Writer.finish()
 
@@ -256,25 +248,21 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
         plt.show()
 
 
-def inspect_net(path):
-    # Device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    net = Net(layers=1).to(device)
+def inspect_net(net, test, path):
     net.load_state_dict(torch.load(path, map_location=device))
-
-    trainloader, testloader = Betondataset("semisynth", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-
-    metrics(net, testloader, plot=True)
+    metrics(net, test, plot=True)
 
 
 if __name__ == "__main__":
-    train_net(load="nets/netcnn_l1w", checkpoints=True, num_epochs=10)
-    # inspect_net("nets/netcnn_l1p2_epoch_5")
+    # Device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    """
-    l2p -         / 99.7-100
-    l1p -         / ?100-100
-    l1  - 223.4 s / 99.2-100
-    l2  - 387.8 s / 100-100
-    """
+    # Data
+    train, val = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
+    test = Betondataset("nc-val", test=0)
+
+    # Net
+    net = Net(layers=1, dropout=0.5).to(device)
+
+    # train_net(net, train, val, load="nets/netcnn_d", checkpoints=True, num_epochs=5)
+    inspect_net(net, test, "nets/netcnn_d_epoch_5")
