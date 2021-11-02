@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 from data import create_synthetic, create_semisynthetic, convert_3d, mean_std
-from data import plot_batch, ToTensor, normalize, random_rotate_flip_3d, resize
+from data import plot_batch, ToTensor, normalize, normalize_each, random_rotate_flip_3d, resize
 from data import Betondata, Synthdata, SemiSynthdata
 
 
@@ -68,18 +68,21 @@ def test_semisynthetic_data():
     #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label2/" % w, size=100, width=w, num_cracks=2)
 
     data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
-                         transform=transforms.Lambda(random_rotate_flip_3d())
+                         transform=transforms.Compose([
+                             transforms.Lambda(random_rotate_flip_3d()),
+                             transforms.Lambda(normalize_each())
+                         ])
                          # data_transform=transforms.Lambda(normalize(0.5, 1))
                          )
     dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
 
     batch = next(iter(dataloader))
     plot_batch(batch["X"], 2)
-    plot_batch(batch["y"], 2)
-    plot_batch(batch["X"], 1)
-    plot_batch(batch["y"], 1)
-    plot_batch(batch["X"], 0)
-    plot_batch(batch["y"], 0)
+    # plot_batch(batch["y"], 2)
+    # plot_batch(batch["X"], 1)
+    # plot_batch(batch["y"], 1)
+    # plot_batch(batch["X"], 0)
+    # plot_batch(batch["y"], 0)
     plt.show()
 
 
@@ -96,12 +99,6 @@ def test_data():
     data_hist(semi.dataset, mult=255, ax=ax[0])
     data_hist(val.dataset, mult=255, ax=ax[1])
     plt.show()
-
-    # batch = next(iter(semi))
-    # print(batch["y"])
-    # # plot_batch(batch["y"])
-    # plot_batch(batch["X"])
-    # plt.show()
 
 
 if __name__ == "__main__":

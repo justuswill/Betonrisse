@@ -43,6 +43,12 @@ class normalize:
         return (t - self.mean) / self.std
 
 
+class normalize_each:
+    """ Normalize with per-image mean and var """
+    def __call__(self, t):
+        return (t - t.mean()) / t.std()
+
+
 class resize:
     def __init__(self, sz):
         self.sz = sz

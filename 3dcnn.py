@@ -96,17 +96,17 @@ def train_net(net, tain, test, load="", checkpoints=True, num_epochs=5):
 
     # Loss / Optimizer
     # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    # pos/all is 2 for semisynth, so basically pos_weight = 2
-    pos_weight = 1
+    # pos/all is 2 for semisynth, so basically pos_weight *= 2
+    pos_weight = 0.75
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
-    lr = 0.001
+    lr = 0.0001
     weight_decay = 0.1
     beta1 = 0.9
     optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
 
     # Animate
     fig, anim_ax = plt.subplots(figsize=(8, 5))
-    Writer = FFMpegWriter(fps=5)
+    Writer = FFMpegWriter(fps=1)
     Writer.setup(fig, "cnn_progress.mp4", dpi=100)
 
     # Training loop
@@ -254,6 +254,8 @@ def inspect_net(net, test, path):
 
 
 if __name__ == "__main__":
+    torch.cuda.empty_cache()
+
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -264,5 +266,5 @@ if __name__ == "__main__":
     # Net
     net = Net(layers=1, dropout=0.5).to(device)
 
-    # train_net(net, train, val, load="nets/netcnn_d", checkpoints=True, num_epochs=5)
-    inspect_net(net, test, "nets/netcnn_d_epoch_5")
+    # train_net(net, train, val, load="nets/netcnn_rob_each", checkpoints=True, num_epochs=5)
+    inspect_net(net, val, "nets/netcnn_rob_each_epoch_5")

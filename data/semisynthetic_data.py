@@ -18,7 +18,7 @@ class Datasetiter():
 
 
 class SemiSynthdata(Dataset):
-    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1,
+    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=True,
                  transform=None, data_transform=None, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces and optional fractal noise
@@ -49,6 +49,7 @@ class SemiSynthdata(Dataset):
 
         self.n = n
         self.size = size
+        self.random_scale = random_scale
         self.noise_iter = Datasetiter(bg)
         self.synth = synth
         self.num_cracks = num_cracks if hasattr(num_cracks, "__getitem__") else [num_cracks]
@@ -72,10 +73,19 @@ class SemiSynthdata(Dataset):
         else:
             label = 1 - sample
 
-        noise = next(self.noise_iter)
-        # todo: add perlin noise?
-        air = 12 + 2 * torch.randn(sample.shape)
-        sample = torch.clamp((torch.squeeze(noise["X"], 0) * sample + air * (1 - sample)) / 255, max=1)
+        air_mean = 12
+        noise_shift = 0
+        air_scale = 2
+        noise_scale = 1
+        if self.random_scale:
+            air_mean = np.random.normal(air_mean, 1.5)
+            noise_shift = np.random.normal(noise_shift, 1)
+            air_scale = np.random.normal(air_scale, 0.5)
+            noise_scale = np.random.normal(noise_scale, 0.2)
+
+        noise = noise_shift + noise_scale * torch.squeeze(next(self.noise_iter)["X"], 0)
+        air = air_mean + air_scale * torch.randn(sample.shape)
+        sample = torch.clamp((noise * sample + air * (1 - sample)) / 255, min=0, max=1)
 
         if self.transform is not None:
             sample = self.transform(sample)

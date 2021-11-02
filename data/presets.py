@@ -1,6 +1,6 @@
 from torch.utils.data import DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
-from .data_tools import ToTensor, normalize, random_rotate_flip_3d, train_test_dataloader
+from .data_tools import ToTensor, normalize, normalize_each, random_rotate_flip_3d, train_test_dataloader
 from .semisynthetic_data import SemiSynthdata
 from .data import Betondata
 
@@ -42,8 +42,10 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
     elif type == "semisynth-inf":
         data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 1, 2],
                              binary_labels=binary_labels,
-                             transform=transforms.Lambda(random_rotate_flip_3d())
-               )
+                             transform=transforms.Compose([
+                                 transforms.Lambda(random_rotate_flip_3d()),
+                                 transforms.Lambda(normalize_each())
+                             ]))
     elif type == "hpc":
         # max: 206
         # mean: 32.69
@@ -53,7 +55,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                             transforms.Lambda(ToTensor()),
                             transforms.Lambda(normalize(32.69, 4.98)),
                             transforms.Lambda(random_rotate_flip_3d())
-                        ]))
+                         ]))
     elif type == "nc":
         # max: 243
         # mean: 25.28
@@ -63,14 +65,14 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                             transforms.Lambda(ToTensor()),
                             transforms.Lambda(normalize(32.69, 4.98)),
                             transforms.Lambda(random_rotate_flip_3d())
-                        ]))
+                         ]))
     elif type == "hpc-riss":
         data = Betondata(img_dirs="D:Data/Beton/HPC/riss/", binary_labels=binary_labels,
                          transform=transforms.Compose([
                             transforms.Lambda(ToTensor()),
                             transforms.Lambda(normalize(33.24, 6.69)),
                             transforms.Lambda(random_rotate_flip_3d())
-                        ]))
+                         ]))
     elif type == "nc-val":
         # [np.save("D:/Data/Beton/NC/test/label/%d.npy" % i, np.array([[[x]]]))
         # for i, x in zip([101, 55, 56, 58, 60, 65, 85, 95, 97, 99], [0,1,1,1,0,0,0,1,1,0])]
@@ -79,7 +81,8 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                          binary_labels=binary_labels,
                          transform=transforms.Compose([
                              transforms.Lambda(ToTensor()),
-                             transforms.Lambda(normalize(0, 255))
+                             # transforms.Lambda(normalize(0, 255))
+                             transforms.Lambda(normalize_each())
                          ]))
     elif type == "semisynth-inf-val":
         return [Betondataset("semisynth-inf", test=0, **kwargs), Betondataset("nc-val", test=0, **kwargs)]
