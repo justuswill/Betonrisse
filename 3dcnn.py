@@ -248,6 +248,84 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
         plt.show()
 
 
+def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
+    """
+    Evaluate a net on a test set an plot groups of data
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.load_state_dict(torch.load(path, map_location=device))
+
+    # Get samples and their output
+    samples = []
+    dur = 0
+    c = 0
+    net.eval()
+    with torch.no_grad():
+        for batch in testloader:
+            inputs = batch["X"].to(device)
+            ids = batch["id"]
+            start = time.time()
+            out = torch.sigmoid(net(inputs)).cpu().view(-1)
+            dur += time.time() - start
+
+            for i in range(len(out)):
+                c += 1
+                labels = batch.get("y", len(batch["X"]) * [None])
+                samples += [(out[i], inputs[i], {"id": ids[i], "label": labels[i]})]
+
+            if c >= n:
+                break
+    net.train()
+    print("Time: %g s (%g s / sample - %.1f s / 2k)" %
+          (dur, dur / c, dur / c * (2000 / 100 * 1.5) ** 3))
+
+    # Sort by output
+    samples.sort(key=lambda x: x[0])
+    out_all = torch.tensor([s[0] for s in samples])
+    out_none = torch.tensor([s[0] for s in samples if s[2]["label"] is None])
+    out_pos = torch.tensor([s[0] for s in samples if s[2]["label"] == 1.0])
+    out_neg = torch.tensor([s[0] for s in samples if s[2]["label"] == 0.0])
+
+    # plot batches of data
+    # for tp, tn, fp, fn
+    cutoff = 0.5
+    tp = [s[1] for s in samples if s[2]["label"] == 1.0 and s[0] > cutoff]
+    tn = [s[1] for s in samples if s[2]["label"] == 0.0 and s[0] < cutoff]
+    fp = [s[1] for s in samples if s[2]["label"] == 0.0 and s[0] > cutoff]
+    fn = [s[1] for s in samples if s[2]["label"] == 1.0 and s[0] < cutoff]
+    if len(tp) > 0:
+        plot_batch(torch.stack(tp[-8:]), title="True positives")
+    if len(tn) > 0:
+        plot_batch(torch.stack(tn[:8]), title="True negatives")
+    if len(fp) > 0:
+        plot_batch(torch.stack(fp[-8:]), title="False positives")
+    if len(fn) > 0:
+        plot_batch(torch.stack(fn[:8]), title="False negatives")
+
+    # for out_log close to p
+    for p_ in p:
+        pos = sorted(sorted(out_all, key=lambda x: abs(x - p_))[:8])
+        plot_batch(torch.stack([s[1] for s in samples if s[0] in pos]),
+                   title=r"p $\in$ [%.2f, %.2f]" % (min(pos), max(pos)))
+
+    # histograms
+
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    bins = np.linspace(0, 1, 40)
+    ax[0].hist(np.array(out_none), bins, alpha=0.5, label="none")
+    ax[0].hist(np.array(out_pos), bins, alpha=0.5, label="pos")
+    ax[0].hist(np.array(out_neg), bins, alpha=0.5, label="neg")
+    ax[0].set_title("Crack probability")
+
+    bins = np.linspace(torch.logit(out_all.min()), torch.logit(out_all.max()), 40)
+    ax[1].hist(np.array(torch.logit(out_none)), bins, alpha=0.5, label="none")
+    ax[1].hist(np.array(torch.logit(out_pos)), bins, alpha=0.5, label="pos")
+    ax[1].hist(np.array(torch.logit(out_neg)), bins, alpha=0.5, label="neg")
+    ax[1].set_title("Net output")
+    ax[1].legend()
+    plt.show()
+
+
 def inspect_net(net, test, path):
     net.load_state_dict(torch.load(path, map_location=device))
     metrics(net, test, plot=True)
@@ -261,10 +339,12 @@ if __name__ == "__main__":
 
     # Data
     train, val = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-    test = Betondataset("nc-val", test=0)
+    # test = Betondataset("nc-val", test=0)
+    test = Betondataset("nc", test=0, batch_size=4)
 
     # Net
     net = Net(layers=1, dropout=0.5).to(device)
 
     # train_net(net, train, val, load="nets/netcnn_rob_each", checkpoints=True, num_epochs=5)
-    inspect_net(net, val, "nets/netcnn_rob_each_epoch_5")
+    # inspect_net(net, test, "nets/netcnn_rob_each_epoch_5")
+    analyze_net(net, test, "nets/netcnn_rob_each_epoch_5")

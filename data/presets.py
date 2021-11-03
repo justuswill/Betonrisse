@@ -60,10 +60,11 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
         # max: 243
         # mean: 25.28
         # std: 3.54
+        norm = kwargs.pop("norm", (25.28, 3.54))
         data = Betondata(img_dirs="D:Data/Beton/HPC/xyz-100-npy/", binary_labels=binary_labels,
                          transform=transforms.Compose([
                             transforms.Lambda(ToTensor()),
-                            transforms.Lambda(normalize(32.69, 4.98)),
+                            transforms.Lambda(normalize(*norm)),
                             transforms.Lambda(random_rotate_flip_3d())
                          ]))
     elif type == "hpc-riss":

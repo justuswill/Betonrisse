@@ -7,7 +7,7 @@ from torchvision.utils import make_grid
 import torch.nn.functional as F
 
 
-def plot_batch(x, acc=2):
+def plot_batch(x, acc=2, title=None):
     """
     Accumulate a dimension into batch dimension and plot a sample of 8 pictures
 
@@ -17,8 +17,10 @@ def plot_batch(x, acc=2):
     plt.figure(figsize=(8, 8))
     sz = x.shape[-1]
     plt.axis("off")
-    slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
-    plt.title("Training Images (%s)" % slice)
+    if title is None:
+        slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
+        title = "Training Images (%s)" % slice
+    plt.title(title)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
             x, 2, 2 + acc)[:, :, 0:sz:(sz // 7), :, :], 1, 2), (-1, 1, sz, sz)),
             padding=2, normalize=True).cpu(), (1, 2, 0))
