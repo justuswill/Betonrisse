@@ -68,7 +68,7 @@ class Net(nn.Module):
         return x
 
 
-def train_net(net, tain, test, load="", checkpoints=True, num_epochs=5):
+def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
     """
     Train a Classifier to generate more data
 
@@ -326,6 +326,55 @@ def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
     plt.show()
 
 
+def animate_dataset(net, testloader, path, n=100):
+    """
+    Loop through a dataset sorted by predicted crack probability
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.load_state_dict(torch.load(path, map_location=device))
+
+    n = min(n, len(testloader))
+
+    # Get samples and their output
+    samples = []
+    dur = 0
+    c = 0
+    net.eval()
+    with torch.no_grad():
+        for batch in testloader:
+            inputs = batch["X"].to(device)
+            ids = batch["id"]
+            start = time.time()
+            out = torch.sigmoid(net(inputs)).cpu().view(-1)
+            dur += time.time() - start
+
+            for i in range(len(out)):
+                c += 1
+                labels = batch.get("y", len(batch["X"]) * [None])
+                samples += [(out[i], inputs[i].cpu(), {"id": ids[i], "label": labels[i]})]
+
+            if c >= n:
+                break
+    net.train()
+    print("Time: %g s (%g s / sample - %.1f s / 2k)" %
+          (dur, dur / c, dur / c * (2000 / 100 * 1.5) ** 3))
+
+    # Sort by output
+    samples.sort(key=lambda x: x[0])
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    Writer = FFMpegWriter(fps=5)
+    Writer.setup(fig, "dataset_sorted.mp4", dpi=100)
+
+    for p in range(0, n, 8):
+        ax.clear()
+        plot_batch(torch.stack([s[1] for s in samples[p: p+8]]),
+                   ax=ax, title=r"p $\in$ [%.2f, %.2f]" % (samples[p][0], samples[min(n-1, p+8)][0]))
+        Writer.grab_frame()
+
+    Writer.finish()
+
+
 def inspect_net(net, test, path):
     net.load_state_dict(torch.load(path, map_location=device))
     metrics(net, test, plot=True)
@@ -339,12 +388,13 @@ if __name__ == "__main__":
 
     # Data
     train, val = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-    # test = Betondataset("nc-val", test=0)
-    test = Betondataset("nc", test=0, batch_size=4)
+    # test = Betondataset("nc-val", test=0, batch_size=4)
+    test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
     # Net
-    net = Net(layers=1, dropout=0.5).to(device)
+    net = Net(layers=1, dropout=0.0).to(device)
 
-    # train_net(net, train, val, load="nets/netcnn_rob_each", checkpoints=True, num_epochs=5)
-    # inspect_net(net, test, "nets/netcnn_rob_each_epoch_5")
-    analyze_net(net, test, "nets/netcnn_rob_each_epoch_5")
+    # train_net(net, train, val, load="nets/netcnn", checkpoints=True, num_epochs=10)
+    # inspect_net(net, test, "nets/netcnn_epoch_5")
+    analyze_net(net, test, "nets/netcnn_epoch_1")
+    # animate_dataset(net, train, "nets/netcnn_epoch_5", n=1000)

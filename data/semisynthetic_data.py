@@ -18,7 +18,7 @@ class Datasetiter():
 
 
 class SemiSynthdata(Dataset):
-    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=True,
+    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False,
                  transform=None, data_transform=None, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces and optional fractal noise

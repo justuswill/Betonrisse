@@ -103,5 +103,5 @@ def test_data():
 
 if __name__ == "__main__":
     # test_synthetic_data()
-    test_semisynthetic_data()
-    # test_data()
+    # test_semisynthetic_data()
+    test_data()

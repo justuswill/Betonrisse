@@ -44,7 +44,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                              binary_labels=binary_labels,
                              transform=transforms.Compose([
                                  transforms.Lambda(random_rotate_flip_3d()),
-                                 transforms.Lambda(normalize_each())
+                                 # transforms.Lambda(normalize_each())
                              ]))
     elif type == "hpc":
         # max: 206
@@ -82,8 +82,8 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                          binary_labels=binary_labels,
                          transform=transforms.Compose([
                              transforms.Lambda(ToTensor()),
-                             # transforms.Lambda(normalize(0, 255))
-                             transforms.Lambda(normalize_each())
+                             transforms.Lambda(normalize(0, 255))
+                             # transforms.Lambda(normalize_each())
                          ]))
     elif type == "semisynth-inf-val":
         return [Betondataset("semisynth-inf", test=0, **kwargs), Betondataset("nc-val", test=0, **kwargs)]
