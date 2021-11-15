@@ -7,12 +7,13 @@ from torchvision.utils import make_grid
 import torch.nn.functional as F
 
 
-def plot_batch(x, acc=2, ax=None, title=None, scale=1.5):
+def plot_batch(x, acc=2, ax=None, title=None, scale=0):
     """
     Accumulate a dimension into batch dimension and plot a sample of 8 pictures
 
     :param acc:   which dimension to accumulate, showing different slices: 2 (xy), 1 (xz) or 0 (yz)
-    :param scale: modify brightness. if > 1 brighter else darker
+    :param scale: modify brightness. if > 1 brighter else darker, only works for data in range [0,1].
+                  disable with scale = 0
     :return image that can be shown with imshow later
     """
     if ax is None:
@@ -28,8 +29,10 @@ def plot_batch(x, acc=2, ax=None, title=None, scale=1.5):
     plt.title(title)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
             x, 2, 2 + acc)[:, :, 0:sz:(sz // 7), :, :], 1, 2), (-1, 1, sz, sz)),
-            padding=2, normalize=False).cpu(), (1, 2, 0))
-    plt.imshow(np.clip(scale * img, 0, 1))
+            padding=2, normalize=scale == 0).cpu(), (1, 2, 0))
+    if scale != 0:
+        img = np.clip(scale * img, 0, 1)
+    plt.imshow(img)
     return img
 
 

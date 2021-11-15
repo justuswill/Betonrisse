@@ -265,13 +265,14 @@ def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
             inputs = batch["X"].to(device)
             ids = batch["id"]
             start = time.time()
-            out = torch.sigmoid(net(inputs)).cpu().view(-1)
+            out_pre = net(inputs).cpu().view(-1)
+            out = torch.sigmoid(out_pre)
             dur += time.time() - start
 
             for i in range(len(out)):
                 c += 1
                 labels = batch.get("y", len(batch["X"]) * [None])
-                samples += [(out[i], inputs[i], {"id": ids[i], "label": labels[i]})]
+                samples += [(out[i], inputs[i], {"id": ids[i], "label": labels[i]}, out_pre[i])]
 
             if c >= n:
                 break
@@ -281,10 +282,6 @@ def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
 
     # Sort by output
     samples.sort(key=lambda x: x[0])
-    out_all = torch.tensor([s[0] for s in samples])
-    out_none = torch.tensor([s[0] for s in samples if s[2]["label"] is None])
-    out_pos = torch.tensor([s[0] for s in samples if s[2]["label"] == 1.0])
-    out_neg = torch.tensor([s[0] for s in samples if s[2]["label"] == 0.0])
 
     # plot batches of data
     # for tp, tn, fp, fn
@@ -302,25 +299,29 @@ def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
     if len(fn) > 0:
         plot_batch(torch.stack(fn[:8]), title="False negatives")
 
+    out_all = torch.tensor([s[3] for s in samples])
+    out_none = torch.tensor([s[3] for s in samples if s[2]["label"] is None])
+    out_pos = torch.tensor([s[3] for s in samples if s[2]["label"] == 1.0])
+    out_neg = torch.tensor([s[3] for s in samples if s[2]["label"] == 0.0])
+
     # for out_log close to p
     for p_ in p:
         pos = sorted(sorted(out_all, key=lambda x: abs(x - p_))[:8])
-        plot_batch(torch.stack([s[1] for s in samples if s[0] in pos]),
-                   title=r"p $\in$ [%.2f, %.2f]" % (min(pos), max(pos)))
+        plot_batch(torch.stack([s[1] for s in samples if s[3] in pos][:8]),
+                   title=r"p $\in$ [%.2f, %.2f]" % (torch.sigmoid(min(pos)), torch.sigmoid(max(pos))))
 
     # histograms
-
     fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     bins = np.linspace(0, 1, 40)
-    ax[0].hist(np.array(out_none), bins, alpha=0.5, label="none")
-    ax[0].hist(np.array(out_pos), bins, alpha=0.5, label="pos")
-    ax[0].hist(np.array(out_neg), bins, alpha=0.5, label="neg")
+    ax[0].hist(np.array(torch.sigmoid(out_none)), bins, alpha=0.5, label="none")
+    ax[0].hist(np.array(torch.sigmoid(out_pos)), bins, alpha=0.5, label="pos")
+    ax[0].hist(np.array(torch.sigmoid(out_neg)), bins, alpha=0.5, label="neg")
     ax[0].set_title("Crack probability")
 
-    bins = np.linspace(torch.logit(out_all.min()), torch.logit(out_all.max()), 40)
-    ax[1].hist(np.array(torch.logit(out_none)), bins, alpha=0.5, label="none")
-    ax[1].hist(np.array(torch.logit(out_pos)), bins, alpha=0.5, label="pos")
-    ax[1].hist(np.array(torch.logit(out_neg)), bins, alpha=0.5, label="neg")
+    bins = np.linspace(out_all.min(), out_all.max(), 40)
+    ax[1].hist(np.array(out_none), bins, alpha=0.5, label="none")
+    ax[1].hist(np.array(out_pos), bins, alpha=0.5, label="pos")
+    ax[1].hist(np.array(out_neg), bins, alpha=0.5, label="neg")
     ax[1].set_title("Net output")
     ax[1].legend()
     plt.show()
@@ -388,13 +389,13 @@ if __name__ == "__main__":
 
     # Data
     train, val = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-    # test = Betondataset("nc-val", test=0, batch_size=4)
-    test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
+    test = Betondataset("nc-val", test=0, batch_size=4, norm=(0, 1))
+    # test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
     # Net
     net = Net(layers=1, dropout=0.0).to(device)
 
     # train_net(net, train, val, load="nets/netcnn", checkpoints=True, num_epochs=10)
     # inspect_net(net, test, "nets/netcnn_epoch_5")
-    analyze_net(net, test, "nets/netcnn_epoch_1")
+    analyze_net(net, test, "nets/netcnn_epoch_5")
     # animate_dataset(net, train, "nets/netcnn_epoch_5", n=1000)
