@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import ImageFile
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatch
 from matplotlib.animation import FFMpegWriter
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 plt.rcParams['animation.ffmpeg_path'] = 'D:\\ffmpeg\\bin\\ffmpeg.exe'
@@ -148,9 +149,8 @@ class BetonImg:
               (dur_full, dur_eval, dur_eval / self.predictions.size))
 
     def animate(self):
-        fig, ax = plt.subplots(figsize=(8, 5))
-        plt.axis("off")
-        Writer = FFMpegWriter(fps=20)
+        fig, ax = plt.subplots(figsize=(16, 10))
+        Writer = FFMpegWriter(fps=40)
         Writer.setup(fig, "big_pic.mp4", dpi=100)
 
         for iz, b in enumerate(self.slices.dataloader(batch_size=1)):
@@ -160,10 +160,14 @@ class BetonImg:
 
             for d in range(slice.shape[2]):
                 ax.clear()
+                ax.set_axis_off()
                 im = slice[:, :, d]
-                ax.imshow(im)
+                ax.imshow(im, cmap='gray', vmin=0, vmax=255, origin="lower")
                 for ix, x in enumerate(self.ankers[0]):
                     for iy, y in enumerate(self.ankers[1]):
-                        Bbox.from_extents(xmin, 0, xmax, 1)
+                        if self.predictions[ix, iy, z] == 1 or \
+                            (d > self.n - self.overlap) and (z+1 < self.predictions.shape[2]) \
+                                and (self.predictions[ix, iy, z+1] == 1):
+                            ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc="red", alpha=0.3))
                 Writer.grab_frame()
         Writer.finish()

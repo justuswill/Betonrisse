@@ -70,7 +70,7 @@ class Net(nn.Module):
 
 def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
     """
-    Train a Classifier to generate more data
+    Train a Classifier
 
     :param load: if not "", load Classifier from here and continue training
     :param checkpoints: if state of the net should be saved after each epoch
