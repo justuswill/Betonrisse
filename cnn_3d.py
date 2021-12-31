@@ -183,7 +183,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
     net.eval()
     with torch.no_grad():
         for batch in testloader:
-            inputs, labels = batch["X"].to(device), batch["y"].to(device)
+            inputs, labels = batch["X"].to(device), (batch["y"] > cutoff).float().view(-1)
             start = time.time()
             outputs = torch.sigmoid(net(inputs))
             predicted = (outputs > cutoff).float().view(-1)
@@ -192,6 +192,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
             if criterion is not None:
                 loss += 1 / len(testloader) * criterion(outputs.view(-1), labels).mean().item()
 
+            predicted = predicted.cpu()
             pos_out += outputs[labels == 1].view(-1).tolist()
             neg_out += outputs[labels == 0].view(-1).tolist()
             tp += ((predicted == 1.0) & (labels == 1.0)).sum().item()
@@ -306,7 +307,7 @@ def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
 
     # for out_log close to p
     for p_ in p:
-        pos = sorted(sorted(out_all, key=lambda x: abs(x - p_))[:8])
+        pos = sorted(sorted(out_all, key=lambda x: abs(torch.sigmoid(x) - p_))[:8])
         plot_batch(torch.stack([s[1] for s in samples if s[3] in pos][:8]),
                    title=r"p $\in$ [%.2f, %.2f]" % (torch.sigmoid(min(pos)), torch.sigmoid(max(pos))))
 
@@ -382,20 +383,23 @@ def inspect_net(net, test, path):
 
 
 if __name__ == "__main__":
+    from legacy import LegNet1
     torch.cuda.empty_cache()
 
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Data
-    train, val = Betondataset("semisynth-inf", binary_labels=True, batch_size=4, shuffle=True, num_workers=1)
-    test = Betondataset("nc-val", test=0, batch_size=4, norm=(0, 1))
-    # test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
+    train, val = Betondataset("semisynth-inf", binary_labels=True, confidence=0.9,
+                              batch_size=4, shuffle=True, num_workers=1)
+    # test = Betondataset("nc-val", test=0, batch_size=4, norm=(0, 1))
+    test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
     # Net
-    net = Net(layers=1, dropout=0.0).to(device)
+    net = LegNet1(layers=1).to(device)
 
-    # train_net(net, train, val, load="nets/netcnn", checkpoints=True, num_epochs=10)
-    # inspect_net(net, test, "nets/netcnn_epoch_5")
-    analyze_net(net, test, "nets/netcnn_epoch_5")
-    # animate_dataset(net, train, "nets/netcnn_epoch_5", n=1000)
+    load = "nets/shift_0_11/netcnn_l1p_epoch_5.cp"
+    # train_net(net, train, val, load, checkpoints=True, num_epochs=10)
+    # inspect_net(net, test, load)
+    analyze_net(net, test, load)
+    # animate_dataset(net, test, load, n=1000)

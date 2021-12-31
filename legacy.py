@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 # Old net models
 
-class Net(nn.Module):
+class LegNet0(nn.Module):
     def __init__(self, in_channels=1, dim=100, out_conv_channels=512):
         super().__init__()
 
@@ -66,7 +66,8 @@ class Net(nn.Module):
         return x
 
 
-class Net(nn.Module):
+# pool + final_pool
+class LegNet1(nn.Module):
     def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None):
         """
         Define a standard CNN with <layer> blocks of convolution + pooling
@@ -119,7 +120,8 @@ class Net(nn.Module):
         return x
 
 
-class Net(nn.Module):
+# dropout
+class LegNet2(nn.Module):
     def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None, dropout=0):
         """
         Define a standard CNN with <layer> blocks of convolution + pooling

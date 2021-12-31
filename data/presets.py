@@ -23,6 +23,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                          ]),
                          data_transform=transforms.Lambda(normalize(0.5, 1)))
     elif type == "semisynth":
+        norm = kwargs.pop("norm", (0, 1))
         data = Betondata(img_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-100/input%s/" %
                                    (w, s) for w in [1, 3, 5] for s in ["", "2"]],
                          label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-100/label%s/" %
@@ -32,7 +33,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                              transforms.Lambda(ToTensor()),
                              transforms.Lambda(random_rotate_flip_3d())
                          ]),
-                         data_transform=transforms.Lambda(normalize(0.11, 1)))
+                         data_transform=transforms.Lambda(normalize(*norm)))
         kwargs.pop("shuffle")
         # fixed test = 0.2
         test = [x for a, b in [(0, 160), (200, 280), (300, 460), (500, 580), (600, 760), (800, 880)]
@@ -40,8 +41,10 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
         train = [x for x in range(900) if x not in test]
         return [DataLoader(data, sampler=SubsetRandomSampler(idxs), **kwargs) for idxs in [train, test]]
     elif type == "semisynth-inf":
+        confidence = kwargs.pop("confidence", 1)
         data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 1, 2],
                              binary_labels=binary_labels,
+                             confidence=confidence,
                              transform=transforms.Compose([
                                  transforms.Lambda(random_rotate_flip_3d()),
                                  # transforms.Lambda(normalize_each())

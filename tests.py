@@ -6,7 +6,7 @@ import torchvision.transforms as transforms
 
 from data import create_synthetic, create_semisynthetic, convert_3d, mean_std
 from data import plot_batch, ToTensor, normalize, normalize_each, random_rotate_flip_3d, resize
-from data import Betondata, Synthdata, SemiSynthdata
+from data import Betondata, Synthdata, SemiSynthdata, Betondataset
 
 
 def test_synthetic_data():
@@ -59,6 +59,24 @@ def test_semisynthetic_data_old():
     plt.show()
 
 
+def test_preset_data():
+    train, val = Betondataset("semisynth-inf", binary_labels=True, confidence=0.9,
+                              batch_size=4, shuffle=True, num_workers=1)
+
+    batch = next(iter(train))
+    plot_batch(batch["X"], 2)
+    print(batch["y"])
+    # plot_batch(batch["X"], 1)
+    # plot_batch(batch["y"], 1)
+    # plot_batch(batch["X"], 0)
+    # plot_batch(batch["y"], 0)
+
+    batch = next(iter(val))
+    plot_batch(batch["X"], 2)
+    print(batch["y"])
+    plt.show()
+
+
 def test_semisynthetic_data():
     # for w in [1, 3, 5]:
     #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input/" % w,
@@ -102,6 +120,7 @@ def test_data():
 
 
 if __name__ == "__main__":
+    test_preset_data()
     # test_synthetic_data()
     # test_semisynthetic_data()
-    test_data()
+    # test_data()

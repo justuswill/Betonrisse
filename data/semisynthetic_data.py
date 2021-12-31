@@ -18,7 +18,7 @@ class Datasetiter():
 
 
 class SemiSynthdata(Dataset):
-    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False,
+    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False, confidence=1,
                  transform=None, data_transform=None, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces and optional fractal noise
@@ -54,6 +54,7 @@ class SemiSynthdata(Dataset):
         self.synth = synth
         self.num_cracks = num_cracks if hasattr(num_cracks, "__getitem__") else [num_cracks]
         self.binary_labels = binary_labels
+        self.confidence = confidence
         self.transform = transform
         self.data_transform = data_transform
 
@@ -69,7 +70,8 @@ class SemiSynthdata(Dataset):
             sample = torch.clamp(sample * more_sample, max=1)
 
         if self.binary_labels:
-            label = np.float32(ths_num_cracks > 0)
+            # set to 0:1-conf, 1:conf
+            label = np.float32((1 - self.confidence) + (ths_num_cracks > 0) * (2 * self.confidence - 1))
         else:
             label = 1 - sample
 
