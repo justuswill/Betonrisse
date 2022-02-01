@@ -75,9 +75,9 @@ class SemiSynthdata(Dataset):
         else:
             label = 1 - sample
 
-        air_mean = 12
+        air_mean = 0
         noise_shift = 0
-        air_scale = 2
+        air_scale = 0
         noise_scale = 1
         if self.random_scale:
             air_mean = np.random.normal(air_mean, 1.5)

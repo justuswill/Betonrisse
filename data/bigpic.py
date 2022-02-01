@@ -2,24 +2,25 @@ import io
 import time
 import tarfile
 from PIL import Image
+import tifffile
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-
-# hacky
-from PIL import ImageFile
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatch
 import matplotlib.colors as mc
 from matplotlib.animation import FFMpegWriter
+
+# hacky
+from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 plt.rcParams['animation.ffmpeg_path'] = 'D:\\ffmpeg\\bin\\ffmpeg.exe'
 
 
 # Dataloaders for slices (e.g. xy) with depth n and at least <overlap> layers in common with the previous slice
 class SliceLoader(Dataset):
-    def __init__(self, n, overlap, transform):
+    def __init__(self, n, overlap, transform=None):
         self.n = n
         self.overlap = overlap
         self.transform = transform
@@ -36,7 +37,7 @@ class SliceLoader(Dataset):
         return list(self.getlayer(0).shape) + [self.size()]
 
     def __len__(self):
-        return np.ceil((self.size() - self.n) / (self.n - self.overlap)).astype(np.int) + 1
+        return np.ceil((self.size() - self.n) / (self.n - self.overlap)).astype(int) + 1
 
     def __getitem__(self, idx, transform=None):
         start = idx * (self.n - self.overlap)
@@ -47,7 +48,6 @@ class SliceLoader(Dataset):
         slice = np.stack([self.getlayer(layer) for layer in range(start, end)], axis=-1)
         if self.transform is not None:
             slice = self.transform(slice)
-        print(np.mean(slice))
         return {"X": slice[None, :, :, :], "idx": idx}
 
     def dataloader(self, **kwargs):
@@ -58,7 +58,7 @@ class TarLoader(SliceLoader):
     def __init__(self, img_path, *args):
         super().__init__(*args)
         self.tf = tarfile.open(img_path)
-        self.img_names = list(filter(lambda k: k.endswith("jpg"), self.tf.getnames()))
+        self.img_names = sorted(filter(lambda k: k.endswith("jpg"), self.tf.getnames()))
 
     def size(self):
         return len(self.img_names)
@@ -75,7 +75,6 @@ class TifLoader(SliceLoader):
     def __init__(self, img_path, *args):
         super().__init__(*args)
         self.img_stack = Image.open(img_path)
-        self.img_stack.filename = None
 
     def size(self):
         return self.img_stack.n_frames
@@ -159,6 +158,8 @@ class BetonImg:
         :param mode: "clas": classification wrt. cutoff
                      "cmap": color wrt. output
                      "alpha": alpha wrt. output
+                     "cmap-alpha": color/alpha wrt. output
+                     "none": only img
         """
         if ax is None:
             fig, ax = plt.subplots(figsize=(16, 10))
@@ -193,21 +194,18 @@ class BetonImg:
                     c = list(plt.cm.get_cmap("RdYlGn_r")(norm(pred)))
                     c[3] = alpha
                     ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc=c))
+                elif mode == "none":
+                    pass
                 else:
                     raise ValueError("Mode not supported")
 
-    def animate(self, mode="alpha"):
+    def animate(self, mode="alpha", filename="big_pic.mp4"):
         """
         animate the prediction where the z-axis is time.
-
-        :param mode: "clas": classification wrt. cutoff
-                     "cmap": color wrt. output
-                     "alpha": alpha wrt. output
-                     "cmap-alpha": color/alpha wrt. output
         """
         fig, ax = plt.subplots(figsize=(16, 10))
         Writer = FFMpegWriter(fps=40)
-        Writer.setup(fig, "big_pic.mp4", dpi=100)
+        Writer.setup(fig, filename, dpi=100)
 
         for iz, b in enumerate(self.slices.dataloader(batch_size=1)):
             print("[%.2f %%]" % (100 * iz / len(self.slices)))
@@ -215,11 +213,14 @@ class BetonImg:
             slice = b["X"][0, 0, :, :, :]
 
             for d in range(slice.shape[2]):
+                # skip start
+                if iz > 0 and d < self.overlap:
+                    continue
                 # combine predictions by mean
                 pred = self.predictions[:, :, z]
                 if (d > self.n - self.overlap) and (z + 1 < self.predictions.shape[2]):
                     pred = np.mean([pred, self.predictions[:, :, z + 1]], axis=0)
-                self.animate_layer(slice[:, :, d] / 255, pred, mode=mode, ax=ax)
+                self.animate_layer(slice[:, :, d] / self.max_val, pred, mode=mode, ax=ax)
                 Writer.grab_frame()
         Writer.finish()
 
@@ -228,3 +229,107 @@ class BetonImg:
                         if ank <= idx < ank + self.n], axis=0)
         self.animate_layer(self.slices.getlayer(idx) / self.max_val, pred, mode=mode)
         plt.show()
+
+
+def tif_save(slices, filename):
+    """
+    Re-save img as tif
+    :param slices: Sliceloader of an image with shape Height x Width x Depth
+    """
+    try:
+        mode = slices.img_stack.mode
+    except AttributeError:
+        print("Couldn't infer mode - using \"L\"")
+        mode = "L"
+    if mode == "F":
+        dtype = "uint16"
+    elif mode == "L":
+        dtype = "uint8"
+    else:
+        raise ValueError("No idea what dtype this needs to be")
+
+    # Create file on first slices of first block
+    with tifffile.TiffWriter(filename) as tif:
+        tif.save(slices.getlayer(0).astype(dtype), photometric="minisblack")
+    with tifffile.TiffWriter(filename, append=True) as tif:
+        for i in range(1, slices.size()):
+            try:
+                tif.save(slices.getlayer(i).astype(dtype), photometric="minisblack")
+            except ValueError:
+                print("not fully saved")
+                break
+
+
+def swap_save(slices, filename, axis=0, block_size=100):
+    """
+    Re-save img as tif
+    :param slices: Sliceloader of an image with shape Height x Width x Depth
+    :param axis:    which axs to swap with depth, default is Height (only one tested atm)
+    """
+    try:
+        mode = slices.img_stack.mode
+    except AttributeError:
+        print("Couldn't infer mode - using \"L\"")
+        mode = "L"
+    if mode == "F":
+        dtype = "uint16"
+    elif mode == "L":
+        dtype = "uint8"
+    else:
+        raise ValueError("No idea what dtype this needs to be")
+
+    block_anks = block_size * np.arange(slices.size() // block_size + 1)
+    if slices.size() % block_size != 0:
+        block_anks = np.append(block_anks, block_anks[-1] + slices.size() % block_size)
+    num_blocks = len(block_anks) - 1
+
+    # old_depth x Width x new_depth (height)
+    slc_shape = slices.getlayer(0).shape
+    frame_shape = [slices.size(), slc_shape[1-axis], slc_shape[axis]]
+    # old_depth x Width x block_size (height)
+    block_shape = frame_shape.copy()
+    block_shape[2] = block_size
+
+    # Create file on first slices of first block
+    frames = np.zeros(block_shape, dtype)
+    for i in range(slices.size()):
+        # Swap new_depth to the back
+        frames[i, :, :] = np.swapaxes(slices.getlayer(i), axis, 1)[:, block_anks[0]:block_anks[1]]
+    print("[%.1f %%]" % (100 / num_blocks))
+    # Image.fromarray(frames[:, :, 0]).convert(mode).save(filename, bigtiff=True, format="tiff")
+    with tifffile.TiffWriter(filename) as tif:
+        tif.save(frames[:, :, 0], photometric="minisblack")
+    with tifffile.TiffWriter(filename, append=True) as tif:
+        # Rest of first block
+        for img in range(1, block_size):
+            tif.save(frames[:, :, img], photometric="minisblack")
+
+        # num_blocks passes
+        for b in range(1, num_blocks):
+            # collect portion
+            if b == num_blocks - 1:
+                block_shape[2] = slices.size() % block_size
+            frames = np.zeros(block_shape, dtype)
+            for i in range(slices.size()):
+                # Swap new_depth to the back
+                frames[i, :, :] = np.swapaxes(slices.getlayer(i), axis, 1)[:, block_anks[b]:block_anks[b+1]]
+            print("[%.1f %%]" % (100 * (b + 1) / num_blocks))
+
+            for img in range(block_shape[2]):
+                tif.save(frames[:, :, img], photometric="minisblack")
+
+
+if __name__ == "__main__":
+    # test, save, bits = ["D:/Data/Beton/Real/%sHPC1-crop-around-crack.tif", "E:/Coding/Python/Betonrisse/results/data/HPC_new/%s.mp4", 16]
+    test, save, bits = ["D:/Data/Beton/Real-1/%s180207_UNI-KL_Test_Ursprungsprobe_Unten_PE_25p8um-jpg-xy.tif", "E:/Coding/Python/Betonrisse/results/data/Tube/%s.mp4", 8]
+    if test.endswith(".tif"):
+        slices = TifLoader(test % "", 100, 0)
+    elif test.endswith(".tar"):
+        test_tif = test.replace(".tar", ".tif")
+        slices = TarLoader(test % "", 100, 0)
+        tif_save(slices, test_tif % "")
+    # swap_save(slices, test % "rot0_", axis=0)
+    # swap_save(slices, test % "rot1_", axis=1)
+    # BetonImg(test % "", max_val=2**bits).animate(mode="none", filename=save % "norm")
+    BetonImg(test % "rot0_", max_val=2**bits).animate(mode="none", filename=save % "rot0")
+    BetonImg(test % "rot1_", max_val=2**bits).animate(mode="none", filename=save % "rot1")
