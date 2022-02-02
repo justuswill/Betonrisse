@@ -41,6 +41,22 @@ class ToTensor:
         return torch.from_numpy(t)
 
 
+class Resize3d:
+    def __init__(self, sz):
+        self.sz = sz
+
+    def __call__(self, t):
+        """
+        BxCxHxWxD -> B x C x sz[0] x sz[1] x sz[2]
+        """
+
+        meshz, meshy, meshx = torch.meshgrid([torch.linspace(-1, 1, self.sz[i]) for i in range(3)])
+        grid = torch.stack((meshx, meshy, meshz), 3)
+        grid = grid.unsqueeze(0)
+
+        return F.grid_sample(t, grid.to(t.dtype), align_corners=True)
+
+
 class normalize:
     # HPC/riss: 33.24, 6.69
     # HPC:      32.69, 4.98

@@ -107,17 +107,21 @@ class LegNet1(nn.Module):
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
 
-    def forward(self, x):
+    def forward(self, x, filter=False):
 
         for i in range(self.layers):
             conv = getattr(self, "conv%d" % i)
             pool = self.final_pool if i == self.layers - 1 else self.pool
+            f = conv(x)
             x = pool(conv(x))
         x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x
+        if filter:
+            return f, x
+        else:
+            return x
 
 
 # dropout

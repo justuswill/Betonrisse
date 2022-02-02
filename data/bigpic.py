@@ -5,7 +5,7 @@ from PIL import Image
 import tifffile
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatch
@@ -84,7 +84,7 @@ class TifLoader(SliceLoader):
         return np.array(self.img_stack).astype(np.float32)
 
 
-class BetonImg:
+class BetonImg(Dataset):
     def __init__(self, img_path, n=100, overlap=25, max_val=255, load=None, transform=None):
         """
         Load, split and analyze a picture
@@ -119,6 +119,25 @@ class BetonImg:
 
     def shape(self):
         return self.slices.shape()
+
+    def __getitem__(self, idxs):
+        if hasattr(idxs, "__getitem__"):
+            ix, iy, iz = idxs
+        else:
+            iz = idxs // (len(self.ankers[0]) * len(self.ankers[1]))
+            ixy = idxs % (len(self.ankers[0]) * len(self.ankers[1]))
+            iy = ixy // len(self.ankers[0])
+            ix = ixy % len(self.ankers[0])
+        return {"X": self.slices[iz]["X"][:, self.ankers[0][ix]: self.ankers[0][ix] + self.n, self.ankers[1][iy]: self.ankers[1][iy] + self.n, :]}
+
+    def __len__(self):
+        return np.prod([len(ank) for ank in self.ankers])
+
+    def dataloader(self, **kwargs):
+        if "idxs" in kwargs.keys():
+            return DataLoader(self, sampler=SubsetRandomSampler(kwargs.pop("idxs")), **kwargs)
+        else:
+            return DataLoader(self, **kwargs)
 
     def predict(self, net, device, transform=None):
         # todo: batch_size
