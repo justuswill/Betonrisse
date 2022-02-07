@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -61,12 +62,20 @@ class normalize:
     # HPC/riss: 33.24, 6.69
     # HPC:      32.69, 4.98
     # Semi:     30,    6.5
-    def __init__(self, mean, std):
-        self.mean = mean
+    def __init__(self, mean, std, shift=None):
+        """
+        Normlize tensors from a dataset with given mean and std.
+        If shift is given, instead subtract after scaling (yields the same result for shift=mean/std
+        """
+        self.mean = mean if shift is None else 0
         self.std = std
+        self.shift = shift
 
     def __call__(self, t):
-        return (t - self.mean) / self.std
+        normal = (t - self.mean) / self.std
+        if self.shift is not None:
+            normal = normal - self.shift
+        return normal
 
 
 class normalize_each:
@@ -139,11 +148,38 @@ class random_rotate_flip_3d:
         return t
 
 
-def mean_std(data):
+class rotate_flip_3d:
+    def __init__(self):
+        """
+        Rotate or mirror a cube to any of the 48 possible orientations
+        """
+        self.perms = list(map(list, itertools.permutations([2, 3, 4])))
+
+    def __call__(self, t, idx):
+        """
+        :param t: PyTorch Tensor BxCxHxWxD
+        """
+        fx = idx % 2
+        fy = (idx // 2) % 2
+        fz = ((idx // 2) // 2) % 2
+        pm = ((idx // 2) // 2) // 2
+
+        # rotate
+        perm = [0, 1] + self.perms[pm]
+        t = t.permute(*perm)
+
+        # flip
+        for i, fl in enumerate([fx, fy, fz]):
+            if fl:
+                t = torch.flip(t, [i+2])
+        return t
+
+
+def mean_std(data, workers=2, batch_size=8):
     """
     compute mean and std of a dataset
     """
-    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
+    dataloader = DataLoader(data, batch_size=batch_size, shuffle=False, num_workers=workers)
 
     # Compute mean and std
     mean = 0
@@ -172,7 +208,7 @@ def data_max(data):
     """
     dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
 
-    # Compute mean and std
+    # Compute max
     max = 0
     for i, batch in enumerate(dataloader):
         batch_max = batch["X"].max().item()
@@ -192,7 +228,7 @@ def data_hist(data, mult=1, ax=None):
     bins = np.arange(0, 256)
     hist = np.zeros(bins.shape)
 
-    # Compute mean and std
+    # Compute hist
     for i, batch in enumerate(dataloader):
         array = mult * np.array(batch["X"])
         hist += np.bincount(array.reshape(-1).astype(np.int), minlength=256)

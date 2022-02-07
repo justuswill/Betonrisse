@@ -3,7 +3,7 @@ import torchvision.transforms as transforms
 
 from data import BetonImg, normalize
 # from cnn_3d import Net
-from legacy import LegNet1
+from models.legacy import LegNet1
 
 if __name__ == "__main__":
     torch.cuda.empty_cache()
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     # Net
     # net = Net(layers=1, dropout=0.0).to(device)
     net = LegNet1(layers=1).to(device)
-    net.load_state_dict(torch.load("nets/shift_0_11/netcnn_l1p_epoch_5.cp", map_location=device))
+    net.load_state_dict(torch.load("checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp", map_location=device))
 
     # data.predict(net, device)
     # data.plot_layer(300, mode="clas")

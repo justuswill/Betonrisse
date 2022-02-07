@@ -3,8 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Old net models
+"""
+Old net models, for loading old checkpoints
+"""
 
+
+# 3D CNN - first attempt
 class LegNet0(nn.Module):
     def __init__(self, in_channels=1, dim=100, out_conv_channels=512):
         super().__init__()
@@ -66,7 +70,7 @@ class LegNet0(nn.Module):
         return x
 
 
-# pool + final_pool
+# 3D CNN - choose number of conv. layers + final_pool for constant size of linear layer
 class LegNet1(nn.Module):
     def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None):
         """
@@ -124,7 +128,7 @@ class LegNet1(nn.Module):
             return x
 
 
-# dropout
+# 3D CNN - Dropout (everywhere)
 class LegNet2(nn.Module):
     def __init__(self, in_channels=1, dim=100, layers=4, out_conv_channels=None, extra_pool=None, dropout=0):
         """

@@ -23,6 +23,8 @@ from loss import BinaryDiceLoss as DiceLoss
 
 
 """
+Unet + train, for Segmentation (not tested yet)
+
 Network architecture based on paper
 https://arxiv.org/abs/1606.06650
 with code adapted from
@@ -257,4 +259,4 @@ def train_unet3d(img_dirs=None, load="", checkpoints=True, num_epochs=5):
 
 if __name__ == "__main__":
     test_unet3d()
-    # train_unet3d(load="nets/unet", checkpoints=True, num_epochs=10)
+    # train_unet3d(load="checkpoints/unet", checkpoints=True, num_epochs=10)

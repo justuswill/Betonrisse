@@ -2,7 +2,6 @@ import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-plt.rcParams['animation.ffmpeg_path'] ='D:\\ffmpeg\\bin\\ffmpeg.exe'
 from matplotlib.animation import FFMpegWriter
 
 import torch
@@ -13,9 +12,17 @@ import torchvision.transforms as transforms
 import torch.optim as optim
 
 from data import Betondata, plot_batch, ToTensor, normalize, random_rotate_flip_3d
+from paths import *
+
+plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
 
 
 """
+GAN + train, for generation of additional training data (needs more work)
+
+Currently shows mode collapse, potential fixes with:
+batch normalization between G and D, random rotate/flip, label smoothing, cut vs pad
+
 Network architecture based on original paper NeurIPS 2016
 https://papers.nips.cc/paper/6096-learning-a-probabilistic-latent-space-of-object-shapes-via-3d-generative-adversarial-modeling.pdf
 with code from
@@ -25,9 +32,6 @@ https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 Debugging using (in part)
 https://machinelearningmastery.com/practical-guide-to-gan-failure-modes/
 https://stackoverflow.com/questions/44313306/dcgans-discriminator-getting-too-strong-too-quickly-to-allow-generator-to-learn
-showes mode collapse
-fixed with
-batch normalization between G and D, random rotate/flip, label smoothing, cut vs pad
 """
 
 
@@ -523,5 +527,5 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
 
 if __name__ == "__main__":
     # test_gan3d()
-    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="nets/netG", loadD="nets/netD", checkpoints=True, num_epochs=25)
-    # inspect_netG("nets/netG_epoch_0_old")
+    train_gan3d(img_dirs="D:Data/Beton/HPC/riss/", loadG="checkpoints/netG", loadD="checkpoints/netD", checkpoints=True, num_epochs=25)
+    # inspect_netG("checkpoints/netG_epoch_0_old")

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 
 """
+Loss for Segmentation
+
 Code from https://github.com/hubutui/DiceLoss-PyTorch/blob/master/loss.py
 """
 
