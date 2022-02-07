@@ -202,7 +202,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
 
 def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
     """
-    Evaluate a net on a test set an plot groups of data
+    Evaluate a net on a test set and plot groups of data
     """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net.load_state_dict(torch.load(path, map_location=device))
@@ -334,7 +334,7 @@ def inspect_net(net, test, path):
 
 
 if __name__ == "__main__":
-    from legacy import LegNet1
+    from data import LegNet1
     torch.cuda.empty_cache()
 
     # Device

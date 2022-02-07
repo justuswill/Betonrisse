@@ -15,7 +15,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, Sampler
 import torchvision.transforms as transforms
 
-from data import normalize
+from data import Normalize
 from paths import *
 plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
 
@@ -153,7 +153,7 @@ class BetonImg(Dataset):
         self.batch_size = batch_size
         self.transform = transform
         self.load = load
-        self.slices = loader(img_path, n, overlap, transforms.Lambda(normalize(0, max_val)))
+        self.slices = loader(img_path, n, overlap, transforms.Lambda(Normalize(0, max_val)))
         # starting locations for each chunk
         self.anchors = [sorted(list(set(range(0, s - n, (self.n - self.overlap))) | {s - n})) for s in self.shape()]
         # -1: tbd, 0: no crack, 1: crack

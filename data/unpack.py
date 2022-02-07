@@ -1,8 +1,14 @@
-import io, os
+import io
+import os
 import tarfile
 from PIL import Image
 
 import numpy as np
+
+
+"""
+Tools to unpack and convert from .tar or .tif/.tiff to .npy
+"""
 
 
 def unpack(img_dir, dest):
@@ -27,7 +33,7 @@ def unpack(img_dir, dest):
 
 def convert(img_path, dest):
     """
-    read tif and convert to .npy files
+    read .tif and convert slices to multiple .npy files
     """
     image_stack = Image.open(img_path)
 
@@ -41,7 +47,7 @@ def convert(img_path, dest):
 
 def convert_3d(img_path, dest):
     """
-    read tif and convert to .npy file
+    read .tif and convert to one .npy file
     """
     if img_path.endswith("tif"):
         img_names = [img_path]
@@ -112,5 +118,6 @@ if __name__ == "__main__":
     # cut("D:Data/Beton/Real-1/xy-npy/", "D:Data/Beton/Real-1/xyz-100-npy/", d=100)
     # cut("D:Data/Beton/HPC/xy-npy/", "D:Data/Beton/HPC/xyz-100-npy/", d=100)
     # cut("D:Data/Beton/NC/xy-npy/", "D:Data/Beton/NC/xyz-100-npy/", d=100)
-    for i in range(1, 9):
-        convert_3d("D:\Data\Beton\Synth\width1\input\crack_1_256_w1_%d.tif" % i, "D:Data/Beton/Synth/npy/")
+    # for i in range(1, 9):
+    #    convert_3d("D:\Data\Beton\Synth\width1\input\crack_1_256_w1_%d.tif" % i, "D:Data/Beton/Synth/npy/")
+    pass

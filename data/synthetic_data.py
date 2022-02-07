@@ -6,6 +6,11 @@ from .brownian_surface import generate_crack
 from .noise import generate_fractal_noise_3d
 
 
+"""
+Synthetic data containing cracks (simulated as Brownian surface) and optional fractal/perlin noise.
+"""
+
+
 class Synthdata(Dataset):
     def __init__(self, n=128, size=1000, noise=True, snr=2, empty=True, cached=True, binary_labels=False,
                  transform=None, data_transform=None, **kwargs):
@@ -17,11 +22,11 @@ class Synthdata(Dataset):
         :param noise: if fractal noise should be added
         :param snr: signal to noise ratio - noise range is set to [0, 2/snr] with a mean of 1/snr
         :param empty: if samples should include pictures without cracks (e.g. only noise)
-        :param cached: if samples at fixed index should be cached and reloaded or regenerated
+        :param cached: if samples at fixed index should be cached and reloaded or generated anew
         :param binary_labels: if set true, labels are 1 if its an image of a crack, 0 else.
                               if set false, labels are the same size as the picture with 1 where the crack is.
         :param transform: apply transforms to data and labels
-        :param data_transform: apply transforms only to data
+        :param data_transform: apply transforms only to data, applied after transform
         :param kwargs: parameters for brownian surfaces or fractal noise generation
         """
 

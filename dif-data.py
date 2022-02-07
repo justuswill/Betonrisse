@@ -7,12 +7,26 @@ from torch.autograd import Variable
 from matplotlib.animation import FFMpegWriter
 from torchvision.transforms import Resize
 
-from data import Betondataset, BetonImg, plot_batch, Resize3d, rotate_flip_3d
+from data import Betondataset, BetonImg, plot_batch, Resize_3d, Rotate_flip_3d
+from paths import *
 # from cnn_3d import Net
 from models.legacy import LegNet1
 
 
+"""
+Tools to analyze model and dataset behaviour
+"""
+
+# order of filter (by inspection)
+ORDER = np.array([11, 6, 9, 22, 12, 28, 0, 18, 5, 17, 21, 23, 2, 26, 10, 4, 29,
+                  27, 7, 8, 24, 25, 20, 13, 14, 30, 16, 19, 1, 31, 3, 15])
+
+
 class FilterVisualizer:
+    """
+    With fixed model parameters, optimize input (i.e. image) to maximize activation in one filter.
+    based on code from https://github.com/fg91/visualizing-cnn-feature-maps/blob/master/filter_visualizer.ipynb
+    """
     def __init__(self, net, size=12, upscaling_steps=12, upscaling_factor=1.2):
         self.size, self.upscaling_steps, self.upscaling_factor = size, upscaling_steps, upscaling_factor
         self.model = net
@@ -28,25 +42,25 @@ class FilterVisualizer:
             optimizer = torch.optim.Adam([img_var], lr=lr, weight_decay=1e-6)
             for n in range(opt_steps):  # optimize pixel values for opt_steps times
                 optimizer.zero_grad()
-                input = Resize3d((100, 100, 100))(img_var).to(device)
-                activations, _ = self.model(Resize3d((100, 100, 100))(img_var).to(device), filter=True)
+                input = Resize_3d((100, 100, 100))(img_var).to(device)
+                activations, _ = self.model(Resize_3d((100, 100, 100))(img_var).to(device), filter=True)
                 loss = -activations[0, filter].mean()
                 loss.backward()
                 optimizer.step()
             img = img_var.data.cpu().numpy()[0]
-            out = img
             print(sz)
             sz = int(self.upscaling_factor * sz)  # calculate new image size
-            img = Resize3d((sz, sz, sz))(torch.from_numpy(img[None])) # scale image up
+            img = Resize_3d((sz, sz, sz))(torch.from_numpy(img[None])) # scale image up
             # if blur is not None:
             #     img = cv2.blur(img, (blur, blur))  # blur image to reduce high frequency patterns
         return input.detach().cpu()
 
 
 def visualize(net):
+    """ Visualize first 8 filters using activation maximization """
     fig, ax = plt.subplots(8, figsize=(10, 8))
     FV = FilterVisualizer(net, size=15, upscaling_steps=12, upscaling_factor=1.2)
-    for i, fil in enumerate(np.array([11, 6, 9, 22, 12, 28, 0, 18])):
+    for i, fil in enumerate(ORDER[:8]):
         img = FV.visualize(fil, blur=5)
         plot_batch(img, acc=0, ax=ax[i], title="")
         plt.pause(0.01)
@@ -54,12 +68,11 @@ def visualize(net):
 
 
 def kernels(net):
+    """ Visualize kernels """
     nm_paras = dict(net.named_parameters())
     kernel = nm_paras["conv0.0.weight"].detach().cpu()
 
-    order = np.array([11, 6, 9, 22, 12, 28, 0, 18, 5, 17, 21, 23, 2, 26, 10, 4, 29,
-                      27, 7, 8, 24, 25, 20, 13, 14, 30, 16, 19, 1, 31, 3, 15])
-    kernel = kernel[order]
+    kernel = kernel[ORDER]
 
     fig, ax = plt.subplots(4, 32, figsize=(15, 4))
     mi = np.percentile(kernel, 2)
@@ -86,6 +99,7 @@ def kernels(net):
 
 
 def explain(batch, net, anim=False):
+    """ show filter activations on a batch """
     if anim:
         skip = 1
         Writer = FFMpegWriter(fps=20 / skip)
@@ -135,7 +149,8 @@ def explain(batch, net, anim=False):
 
 
 def symmetry(batch, net):
-    rot = rotate_flip_3d()
+    """ analyze effect of rotation on network output """
+    rot = Rotate_flip_3d()
     results = np.zeros((48, batch.shape[0]))
     with torch.no_grad():
         for i in range(batch.shape[0]):
@@ -161,6 +176,7 @@ def symmetry(batch, net):
 
 
 def scale(batch, net):
+    """ analyze effect of scale on network output """
     results = np.zeros((50, batch.shape[0]))
     scales = np.exp(np.linspace(np.log(1e-3), np.log(1e3)))
     with torch.no_grad():
@@ -183,6 +199,7 @@ def scale(batch, net):
 
 
 def shift(batch, net, logx=True, scale=1):
+    """ analyze effect of shift on network output """
     results = np.zeros((51, batch.shape[0]))
     if logx:
         shifts = np.exp(np.linspace(np.log(1e-2), np.log(1e2), 25))
@@ -244,8 +261,8 @@ if __name__ == "__main__":
 
     synth = Betondataset("semisynth-inf", batch_size=4, shuffle=False, test=0)
     path, idxs, bits, val_shift, val_scale = [
-        "D:/Data/Beton/Real-1/180207_UNI-KL_Test_Ursprungsprobe_Unten_PE_25p8um-jpg-xy.tar", [(13, 3, 14), (8, 20, 14), (6, 6, 0), (10, 5, 0)], 8, 0.6, 2.7]
-        # "D:/Data/Beton/Real/rot0_HPC1-crop-around-crack.tif", [(2, 3, 0), (1, 8, 0), (2, 9, 5), (4, 4, 4)], 16, 0.13, 0.55]
+        TUBE_PATH, [(13, 3, 14), (8, 20, 14), (6, 6, 0), (10, 5, 0)], 8, 0.6, 2.7]
+        # HPC_16_PATH, [(2, 3, 0), (1, 8, 0), (2, 9, 5), (4, 4, 4)], 16, 0.13, 0.55]
     val_set = BetonImg(path, max_val=255)
     val = val_set.dataloader(batch_size=4, idxs=idxs, shuffle=False)
 

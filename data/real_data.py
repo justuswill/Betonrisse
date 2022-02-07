@@ -4,19 +4,24 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
+"""
+Dataset object with real data for training and testing
+"""
+
+
 class Betondata(Dataset):
     def __init__(self, img_dirs, label_dirs=None, binary_labels=False, transform=None, data_transform=None):
         """
-        Load npy from (multiple) locations
+        Load npy from (multiple) locations, optional with labels
 
         :param img_dirs: path (or list of paths) to image npy files
-        :param img_dirs: path (or list of paths) to label npy files,
+        :param label_dirs: path (or list of paths) to label npy files,
             if a file here has the same name as a file in img_dirs it is its label.
             pictures without matching label get the all-zero label.
         :param binary_labels: if set true, labels are 1 if its an image of a crack, 0 else.
                               if set false, labels are the same size as the picture with 1 where the crack is.
         :param transform: apply transforms to data and labels
-        :param data_transform: apply transforms only to data
+        :param data_transform: apply transforms only to data, applied after transform
         """
         if not isinstance(img_dirs, list):
             img_dirs = [img_dirs]

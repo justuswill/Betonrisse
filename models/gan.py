@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim as optim
 
-from data import Betondata, plot_batch, ToTensor, normalize, random_rotate_flip_3d
+from data import Betondata, plot_batch, ToTensor, Normalize, Random_rotate_flip_3d
 from paths import *
 
 plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
@@ -353,8 +353,8 @@ def train_gan3d(img_dirs, loadG="", loadD="", checkpoints=True, num_epochs=5):
     # Data
     data = Betondata(img_dirs=img_dirs, transform=transforms.Compose([
         transforms.Lambda(ToTensor()),
-        transforms.Lambda(normalize(33.24, 6.69)),
-        transforms.Lambda(random_rotate_flip_3d())
+        transforms.Lambda(Normalize(33.24, 6.69)),
+        transforms.Lambda(Random_rotate_flip_3d())
     ]))
     dataloader = DataLoader(data, batch_size=4, shuffle=True, num_workers=1)
 

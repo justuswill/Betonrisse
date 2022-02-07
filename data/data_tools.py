@@ -1,20 +1,25 @@
-import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torchvision.utils import make_grid
-import torch.nn.functional as F
 
 
-def plot_batch(x, acc=2, ax=None, title=None, scale=0):
+"""
+functions for plotting and analyzing datasets
+"""
+
+
+def plot_batch(x, acc=2, ax=None, title=None, scale=None):
     """
-    Accumulate a dimension into batch dimension and plot a sample of 8 pictures
+    Plot a batch by plotting cross-sections at different depths of the 3D Image.
+    Each row is one sample, each column one depth.
 
-    :param acc:   which dimension to accumulate, showing different slices: 2 (xy), 1 (xz) or 0 (yz)
-    :param scale: modify brightness. if > 1 brighter else darker, only works for data in range [0,1].
-                  disable with scale = 0
+    :param x: batch of shape B x C x H X W x D
+    :param acc:   which dimension to accumulate per row, showing different slices: 2 (xy), 1 (xz) or 0 (yz)
+    :param scale: modify brightness. if > 1 brighter else darker, only works for data in range [0,1], optional
+                  if not given normalize to min and max value found in batch
     :return image that can be shown with imshow later
     """
     if ax is None:
@@ -30,149 +35,11 @@ def plot_batch(x, acc=2, ax=None, title=None, scale=0):
     plt.title(title)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
             x, 2, 2 + acc)[:, :, 0:sz:(sz // 7), :, :], 1, 2), (-1, 1, sz, sz)),
-            padding=2, normalize=scale == 0).cpu(), (1, 2, 0))
-    if scale != 0:
+            padding=2, normalize=scale is None).cpu(), (1, 2, 0))
+    if scale is not None:
         img = np.clip(scale * img, 0, 1)
     plt.imshow(img)
     return img
-
-
-class ToTensor:
-    def __call__(self, t):
-        return torch.from_numpy(t)
-
-
-class Resize3d:
-    def __init__(self, sz):
-        self.sz = sz
-
-    def __call__(self, t):
-        """
-        BxCxHxWxD -> B x C x sz[0] x sz[1] x sz[2]
-        """
-
-        meshz, meshy, meshx = torch.meshgrid([torch.linspace(-1, 1, self.sz[i]) for i in range(3)])
-        grid = torch.stack((meshx, meshy, meshz), 3)
-        grid = grid.unsqueeze(0)
-
-        return F.grid_sample(t, grid.to(t.dtype), align_corners=True)
-
-
-class normalize:
-    # HPC/riss: 33.24, 6.69
-    # HPC:      32.69, 4.98
-    # Semi:     30,    6.5
-    def __init__(self, mean, std, shift=None):
-        """
-        Normlize tensors from a dataset with given mean and std.
-        If shift is given, instead subtract after scaling (yields the same result for shift=mean/std
-        """
-        self.mean = mean if shift is None else 0
-        self.std = std
-        self.shift = shift
-
-    def __call__(self, t):
-        normal = (t - self.mean) / self.std
-        if self.shift is not None:
-            normal = normal - self.shift
-        return normal
-
-
-class normalize_each:
-    """ Normalize with per-image mean and var """
-    def __call__(self, t):
-        return (t - t.mean()) / t.std()
-
-
-class resize:
-    def __init__(self, sz):
-        self.sz = sz
-
-    def __call__(self, t):
-        return torch.squeeze(F.interpolate(t[None, :], size=self.sz, mode="trilinear", align_corners=False), 0)
-
-
-class randomCrop:
-    def __init__(self, sz):
-        self.sz = sz
-
-    def __call__(self, t):
-        s = np.random.choice(t.shape[-1] - self.sz, size=3)
-        return t[:, s[0]:s[0] + self.sz, s[1]:s[1] + self.sz, s[2]:s[2] + self.sz]
-
-
-class random_rotate_flip_xy:
-    def __call__(self, t):
-        # flip
-        if np.random.choice([True, False]):
-            t = torch.flip(t, [1])
-        # rotate xy planes
-        rot = np.random.choice(4)
-        t = torch.rot90(t, rot, (1, 2))
-        return t
-
-
-class random_rotate_flip_3d:
-    def __init__(self, cache=True):
-        """
-        Randomly rotate or mirror a cube to any of the 48 possible orientations
-
-        cache - save the last rotation to apply it again (only exactly once more)
-        """
-        self.cache = cache
-        self.perm = None
-        self.flips = None
-
-    def __call__(self, t):
-        # permute axis
-        if self.perm is None:
-            perm = [0] + list(np.random.permutation(3) + 1)
-            if self.cache:
-                self.perm = perm
-        else:
-            perm = self.perm
-            self.perm = None
-        t = t.permute(*perm)
-
-        # flip
-        if self.flips is None:
-            flips = [np.random.choice([True, False]) for _ in range(3)]
-            if self.cache:
-                self.flips = flips
-        else:
-            flips = self.flips
-            self.flips = None
-        for i in range(3):
-            if flips[i]:
-                t = torch.flip(t, [i+1])
-        return t
-
-
-class rotate_flip_3d:
-    def __init__(self):
-        """
-        Rotate or mirror a cube to any of the 48 possible orientations
-        """
-        self.perms = list(map(list, itertools.permutations([2, 3, 4])))
-
-    def __call__(self, t, idx):
-        """
-        :param t: PyTorch Tensor BxCxHxWxD
-        """
-        fx = idx % 2
-        fy = (idx // 2) % 2
-        fz = ((idx // 2) // 2) % 2
-        pm = ((idx // 2) // 2) // 2
-
-        # rotate
-        perm = [0, 1] + self.perms[pm]
-        t = t.permute(*perm)
-
-        # flip
-        for i, fl in enumerate([fx, fy, fz]):
-            if fl:
-                t = torch.flip(t, [i+2])
-        return t
 
 
 def mean_std(data, workers=2, batch_size=8):
@@ -221,7 +88,7 @@ def data_max(data):
 
 def data_hist(data, mult=1, ax=None):
     """
-    compute max of a dataset
+   plot histogram of a dataset
     """
     dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
 

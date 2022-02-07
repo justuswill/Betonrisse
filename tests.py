@@ -5,8 +5,13 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
 from data import create_synthetic, create_semisynthetic, convert_3d, mean_std
-from data import plot_batch, ToTensor, normalize, normalize_each, random_rotate_flip_3d, resize
+from data import plot_batch, ToTensor, Normalize, Normalize_each, Random_rotate_flip_3d, Resize
 from data import Betondata, Synthdata, SemiSynthdata, Betondataset
+
+
+"""
+Sanity checks and inspection of data
+"""
 
 
 def test_synthetic_data():
@@ -15,9 +20,9 @@ def test_synthetic_data():
     data = Synthdata(n=100, size=32, empty=True, noise=True, octaves=1,
                      transform=transforms.Compose([
                          transforms.Lambda(ToTensor()),
-                         transforms.Lambda(random_rotate_flip_3d())
+                         transforms.Lambda(Random_rotate_flip_3d())
                      ]),
-                     data_transform=transforms.Lambda(normalize(0.5, 1)))
+                     data_transform=transforms.Lambda(Normalize(0.5, 1)))
     dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=0)
     # trainloader, testloader = train_test_dataloader(data, batch_size=8, shuffle=True, num_workers=0)
 
@@ -43,10 +48,10 @@ def test_semisynthetic_data_old():
                      label_dirs=["D:/Data/Beton/Semi-Synth/w%d-npy-256/label/" % w for w in [3, 5]],
                      transform=transforms.Compose([
                          transforms.Lambda(ToTensor()),
-                         transforms.Lambda(resize(100)),
-                         transforms.Lambda(random_rotate_flip_3d())
+                         transforms.Lambda(Resize(100)),
+                         transforms.Lambda(Random_rotate_flip_3d())
                      ]),
-                     data_transform=transforms.Lambda(normalize(30, 6.5)))
+                     data_transform=transforms.Lambda(Normalize(30, 6.5)))
     dataloader = DataLoader(data, batch_size=8, shuffle=True, num_workers=0)
 
     batch = next(iter(dataloader))
@@ -56,6 +61,33 @@ def test_semisynthetic_data_old():
     plot_batch(batch["y"], 1)
     plot_batch(batch["X"], 0)
     plot_batch(batch["y"], 0)
+    plt.show()
+
+
+def test_semisynthetic_data():
+    # for w in [1, 3, 5]:
+    #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input/" % w,
+    #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label/" % w, size=200, width=w, num_cracks=1)
+    # for w in [1, 3, 5]:
+    #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input2/" % w,
+    #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label2/" % w, size=100, width=w, num_cracks=2)
+
+    data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
+                         transform=transforms.Compose([
+                             transforms.Lambda(Random_rotate_flip_3d()),
+                             transforms.Lambda(Normalize_each())
+                         ])
+                         # data_transform=transforms.Lambda(normalize(0.5, 1))
+                         )
+    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
+
+    batch = next(iter(dataloader))
+    plot_batch(batch["X"], 2)
+    # plot_batch(batch["y"], 2)
+    # plot_batch(batch["X"], 1)
+    # plot_batch(batch["y"], 1)
+    # plot_batch(batch["X"], 0)
+    # plot_batch(batch["y"], 0)
     plt.show()
 
 
@@ -77,33 +109,6 @@ def test_preset_data():
     plt.show()
 
 
-def test_semisynthetic_data():
-    # for w in [1, 3, 5]:
-    #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input/" % w,
-    #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label/" % w, size=200, width=w, num_cracks=1)
-    # for w in [1, 3, 5]:
-    #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input2/" % w,
-    #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label2/" % w, size=100, width=w, num_cracks=2)
-
-    data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
-                         transform=transforms.Compose([
-                             transforms.Lambda(random_rotate_flip_3d()),
-                             transforms.Lambda(normalize_each())
-                         ])
-                         # data_transform=transforms.Lambda(normalize(0.5, 1))
-                         )
-    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
-
-    batch = next(iter(dataloader))
-    plot_batch(batch["X"], 2)
-    # plot_batch(batch["y"], 2)
-    # plot_batch(batch["X"], 1)
-    # plot_batch(batch["y"], 1)
-    # plot_batch(batch["X"], 0)
-    # plot_batch(batch["y"], 0)
-    plt.show()
-
-
 def test_data():
     from data import data_max, mean_std, data_hist, Betondataset
 
@@ -120,7 +125,7 @@ def test_data():
 
 
 if __name__ == "__main__":
-    test_preset_data()
+    # test_preset_data()
     # test_synthetic_data()
     # test_semisynthetic_data()
-    # test_data()
+    test_data()

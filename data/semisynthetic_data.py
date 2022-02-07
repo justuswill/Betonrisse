@@ -4,9 +4,14 @@ import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
 
-from .data import Betondata
-from .synthetic_data import Synthdata
-from .data_tools import ToTensor, randomCrop, random_rotate_flip_3d
+from data import ToTensor, RandomCrop, Random_rotate_flip_3d
+from data import Betondata, Synthdata
+from paths import *
+
+
+"""
+Semisynthetic data combining cracks (simulated as Brownian surface) with real background images.
+"""
 
 
 class Datasetiter():
@@ -21,30 +26,34 @@ class SemiSynthdata(Dataset):
     def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False, confidence=1,
                  transform=None, data_transform=None, **kwargs):
         """
-        Generate 3d images of cracks with brownian surfaces and optional fractal noise
+        Generate 3d images of cracks with brownian surfaces
 
         :param n: images are of size dim x dim x dim
-        :param size: number of samples
-        :param empty: if samples should include pictures without cracks (e.g. only noise)
+        :param size: number of samples per epoch (doesn't really matter, no repetitions anyway)
         :param binary_labels: if set true, labels are 1 if its an image of a crack, 0 else.
                               if set false, labels are the same size as the picture with 1 where the crack is.
+        :param num_cracks: list of possible number of cracks
+        :param random_scale: if True mean and scale of crack and background are randomly varied
+        :param confidence: set labels of cracks to confidence (default 1)
+                           and labels of non-cracks to 1 - confidence (default 0)
+
         :param transform: apply transforms to data and labels
-        :param data_transform: apply transforms only to data
+        :param data_transform: apply transforms only to data, applied after transform
         :param kwargs: args for the brownian surface (i.e. crack simulation)
         """
 
         # max: 217, mean: 30.47, std: 5.91
-        bg = Betondata(img_dirs="D:/Data/Beton/Semi-Synth/bg-npy-256/",
+        bg = Betondata(img_dirs=BG_PATH,
                        transform=transforms.Compose([
                             transforms.Lambda(ToTensor()),
-                            transforms.Lambda(randomCrop(n)),
-                            transforms.Lambda(random_rotate_flip_3d(cache=not binary_labels))
+                            transforms.Lambda(RandomCrop(n)),
+                            transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
                        ]))
 
         synth = Synthdata(n=n, size=size, noise=False, empty=False, cached=False, binary_labels=True, **kwargs,
                           transform=transforms.Compose([
                               transforms.Lambda(ToTensor()),
-                              transforms.Lambda(random_rotate_flip_3d(cache=not binary_labels))
+                              transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
                           ]))
 
         self.n = n
@@ -62,22 +71,23 @@ class SemiSynthdata(Dataset):
         return self.size
 
     def __getitem__(self, idx):
+        # Cracks
         sample = torch.ones([1, self.n, self.n, self.n])
-
         ths_num_cracks = np.random.choice(self.num_cracks)
         for _ in range(ths_num_cracks):
             more_sample = self.synth[idx]["X"]
             sample = torch.clamp(sample * more_sample, max=1)
 
         if self.binary_labels:
-            # set to 0:1-conf, 1:conf
+            # set to 0 -> 1-conf, 1 -> conf
             label = np.float32((1 - self.confidence) + (ths_num_cracks > 0) * (2 * self.confidence - 1))
         else:
             label = 1 - sample
 
+        # todo: experiment some more (air_mean > 0!)
         air_mean = 0
-        noise_shift = 0
         air_scale = 0
+        noise_shift = 0
         noise_scale = 1
         if self.random_scale:
             air_mean = np.random.normal(air_mean, 1.5)
@@ -85,6 +95,7 @@ class SemiSynthdata(Dataset):
             air_scale = np.random.normal(air_scale, 0.5)
             noise_scale = np.random.normal(noise_scale, 0.2)
 
+        # Combine noise and air (crack) - weighted by sample
         noise = noise_shift + noise_scale * torch.squeeze(next(self.noise_iter)["X"], 0)
         air = air_mean + air_scale * torch.randn(sample.shape)
         sample = torch.clamp((noise * sample + air * (1 - sample)) / 255, min=0, max=1)
