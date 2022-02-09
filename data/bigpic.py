@@ -15,7 +15,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, Sampler
 import torchvision.transforms as transforms
 
-from data import Normalize
+from data.data_transforms import Normalize
 from paths import *
 plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
 

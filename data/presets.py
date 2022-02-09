@@ -1,7 +1,9 @@
 from torch.utils.data import DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
-from data import train_test_dataloader, ToTensor, Normalize, Normalize_each, Random_rotate_flip_3d
-from data import SemiSynthdata, Betondata
+from data.data_tools import train_test_dataloader
+from data.data_transforms import ToTensor, Normalize, Normalize_each, Random_rotate_flip_3d
+from data.semisynthetic_data import SemiSynthdata
+from data.real_data import Betondata
 from paths import *
 
 

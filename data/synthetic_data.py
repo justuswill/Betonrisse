@@ -2,8 +2,8 @@ import numpy as np
 
 from torch.utils.data import Dataset
 
-from .brownian_surface import generate_crack
-from .noise import generate_fractal_noise_3d
+from data.brownian_surface import generate_crack
+from data.noise import generate_fractal_noise_3d
 
 
 """

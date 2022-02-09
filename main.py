@@ -4,7 +4,7 @@ import torchvision.transforms as transforms
 from data import BetonImg, Normalize
 from paths import *
 # from cnn_3d import Net
-from models.legacy import LegNet1
+from models import LegNet1
 
 """
 Prediction and animation of big 3D images

@@ -200,7 +200,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
         plt.show()
 
 
-def analyze_net(net, testloader, path, n=100, p=[0, 0.25, 0.5, 0.75, 1]):
+def analyze_net(net, testloader, path, n=100, p=(0, 0.25, 0.5, 0.75, 1)):
     """
     Evaluate a net on a test set and plot groups of data
     """
@@ -334,7 +334,7 @@ def inspect_net(net, test, path):
 
 
 if __name__ == "__main__":
-    from data import LegNet1
+    from models import LegNet1
     torch.cuda.empty_cache()
 
     # Device
@@ -351,6 +351,6 @@ if __name__ == "__main__":
 
     load = "checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp"
     # train_net(net, train, val, load, checkpoints=True, num_epochs=10)
-    # inspect_net(net, test, load)
+    # inspect_net(net, test, load) b
     analyze_net(net, test, load)
     # animate_dataset(net, test, load, n=1000)

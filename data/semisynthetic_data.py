@@ -4,8 +4,9 @@ import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
 
-from data import ToTensor, RandomCrop, Random_rotate_flip_3d
-from data import Betondata, Synthdata
+from data.data_transforms import ToTensor, RandomCrop, Random_rotate_flip_3d
+from data.synthetic_data import Synthdata
+from data.real_data import Betondata
 from paths import *
 
 

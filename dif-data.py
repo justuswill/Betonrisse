@@ -10,7 +10,7 @@ from torchvision.transforms import Resize
 from data import Betondataset, BetonImg, plot_batch, Resize_3d, Rotate_flip_3d
 from paths import *
 # from cnn_3d import Net
-from models.legacy import LegNet1
+from models import LegNet1
 
 
 """
