@@ -29,10 +29,11 @@ class Normalize:
         self.shift = shift
 
     def __call__(self, t):
-        normal = (t - self.mean) / self.std
+        t -= self.mean
+        t /= self.std
         if self.shift is not None:
-            normal = normal - self.shift
-        return normal
+            t -= self.shift
+        return t
 
 
 class Normalize_each:

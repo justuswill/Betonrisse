@@ -9,7 +9,8 @@ import matplotlib.patches as mpatch
 import matplotlib.colors as mc
 from matplotlib.animation import FFMpegWriter
 from abc import ABC, abstractmethod
-from typing import Sized, Iterator
+from typing import Iterator
+import gc
 
 import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, Sampler
@@ -31,6 +32,33 @@ Data is loaded/stored using the SliceLoader class, a PyTorch dataset containing 
 Prediction, plotting, etc is done by the BetonImg class,
 which is also a (very inefficient, only for debugging) Pytorch dataset containing all 3D Image chunks.
 """
+
+
+import tracemalloc, os, linecache
+def display_top(snapshot, key_type='lineno', limit=3):
+    snapshot = snapshot.filter_traces((
+        tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+        tracemalloc.Filter(False, "<unknown>"),
+    ))
+    top_stats = snapshot.statistics(key_type)
+
+    print("Top %s lines" % limit)
+    for index, stat in enumerate(top_stats[:limit], 1):
+        frame = stat.traceback[0]
+        # replace "/path/to/module/file.py" with "module/file.py"
+        filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+        print("#%s: %s:%s: %.1f MiB"
+              % (index, filename, frame.lineno, stat.size / 1024 / 1024))
+        line = linecache.getline(frame.filename, frame.lineno).strip()
+        if line:
+            print('    %s' % line)
+
+    other = top_stats[limit:]
+    if other:
+        size = sum(stat.size for stat in other)
+        print("%s other: %.1f MiB" % (len(other), size / 1024 / 1024))
+    total = sum(stat.size for stat in top_stats)
+    print("Total allocated size: %.1f MiB" % (total / 1024 / 1024))
 
 
 # Dataloaders for slices (e.g. xy) with depth n and at least <overlap> layers in common with the previous slice
@@ -65,7 +93,12 @@ class SliceLoader(ABC, Dataset):
         if end > self.size():
             start = self.size() - self.n
             end = self.size()
-        slice = np.stack([self.getlayer(layer) for layer in range(start, end)], axis=-1)
+
+        # slice = np.stack([self.getlayer(layer) for layer in range(start, end)], axis=-1)
+        slice = np.empty(self.shape()[0:2] + [self.n], np.float32)
+        for i, layer in enumerate(range(start, end)):
+            slice[:, :, i] = self.getlayer(layer)
+
         if self.transform is not None:
             slice = self.transform(slice)
         return {"X": slice[None, :, :, :], "idx": idx}
@@ -106,26 +139,25 @@ class TifLoader(SliceLoader):
         return np.array(self.img_stack).astype(np.float32)
 
 
-# Sampler for slices
-class RangeSampler(Sampler):
+class SubsetSampler(Sampler[int]):
     """
-    Samples elements sequentially from a range, always in the same order,
-    """
-    data_source: Sized
+    Samples elements from a given list of indices, without replacement.
 
-    def __init__(self, data_source: Sized, start=0) -> None:
-        self.data_source = data_source
-        self.start = 0
+    :param indices (sequence): a sequence of indices
+    """
+    def __init__(self, indices):
+        self.indices = indices
 
     def __iter__(self) -> Iterator[int]:
-        return iter(range(self.start, len(self.data_source)))
+        for idx in self.indices:
+            yield idx
 
     def __len__(self) -> int:
-        return len(self.data_source)
+        return len(self.indices)
 
 
 class BetonImg(Dataset):
-    def __init__(self, img_path, n=100, overlap=25, max_val=255, batch_size=8, transform=None, load=None):
+    def __init__(self, img_path, n=100, overlap=25, max_val=255, batch_size=4, transform=None, load=None):
         """
         Load, split and analyze a large 3D image.
         As a Pytorch dataset it provides (very inefficiently) image chunks.
@@ -154,6 +186,7 @@ class BetonImg(Dataset):
         self.transform = transform
         self.load = load
         self.slices = loader(img_path, n, overlap, transforms.Lambda(Normalize(0, max_val)))
+        self.cached_slice = None
         # starting locations for each chunk
         self.anchors = [sorted(list(set(range(0, s - n, (self.n - self.overlap))) | {s - n})) for s in self.shape()]
         # -1: tbd, 0: no crack, 1: crack
@@ -172,7 +205,13 @@ class BetonImg(Dataset):
     def __len__(self):
         return np.prod([len(ank) for ank in self.anchors])
 
-    def __getitem__(self, idxs):
+    def __getitem__(self, idxs, cache=True):
+        """
+        Get a chunk by tuple or idx.
+
+        :param cache: save slice for next call to __getitem__
+        :return:
+        """
         if hasattr(idxs, "__getitem__"):
             ix, iy, iz = idxs
         else:
@@ -180,11 +219,20 @@ class BetonImg(Dataset):
             ixy = idxs % (len(self.anchors[0]) * len(self.anchors[1]))
             iy = ixy // len(self.anchors[0])
             ix = ixy % len(self.anchors[0])
-        return {"X": self.slices[iz]["X"][:, self.anchors[0][ix]: self.anchors[0][ix] + self.n, self.anchors[1][iy]: self.anchors[1][iy] + self.n, :]}
+
+        # Load cached slice
+        if self.cached_slice is not None and self.cached_slice[0] == iz:
+            slc = self.cached_slice[1]
+        else:
+            slc = self.slices[iz]["X"]
+        if cache:
+            self.cached_slice = iz, slc
+
+        return {"X": slc[:, self.anchors[0][ix]: self.anchors[0][ix] + self.n, self.anchors[1][iy]: self.anchors[1][iy] + self.n, :]}
 
     def dataloader(self, **kwargs):
         if "idxs" in kwargs.keys():
-            return DataLoader(self, sampler=SubsetRandomSampler(kwargs.pop("idxs")), **kwargs)
+            return DataLoader(self, sampler=SubsetSampler(kwargs.pop("idxs")), **kwargs)
         else:
             return DataLoader(self, **kwargs)
 
@@ -194,22 +242,21 @@ class BetonImg(Dataset):
 
         :return: evaluation time
         """
-        batch_output = []
         dur_eval = 0
         start = time.time()
-        batch_output += [net(batch.to(device)).cpu().float().view(-1)]
+        batch_output = net(batch.to(device)).cpu().float().view(-1)
         dur_eval += time.time() - start
         for out, ix, iy, iz in zip(batch_output, batch_ix, batch_iy, batch_iz):
             self.predictions[ix, iy, iz] = out
         return dur_eval
 
-    def predict(self, net, device, transform=None):
+    def predict(self, net, device, head=None):
         """
         Predict all chunks of the image.
 
         :param net: model (with loaded parameters)
         :param device: PyTorch device
-        :param transform:
+        :param head: number of layers to predict, optional, default: all layers
         :return:
         """
         # todo: more workers? -> complex, not yet necessary
@@ -218,8 +265,10 @@ class BetonImg(Dataset):
             return
 
         # Continue partial prediction
-        idxs = np.any(self.predictions == -1, axis=(0, 1))
-        dataloader = self.slices.dataloader(batch_size=1, sampler=iter(idxs))
+        idxs = np.where(np.any(self.predictions == -1, axis=(0, 1)))[0]
+        if head is not None:
+            idxs = idxs[:head]
+        dataloader = self.slices.dataloader(batch_size=1, sampler=SubsetSampler(idxs))
         batch_input, batch_ix, batch_iy, batch_iz = [], [], [], []
 
         save_next_batch = False
@@ -233,17 +282,18 @@ class BetonImg(Dataset):
                     for iy, y in enumerate(self.anchors[1]):
                         if self.predictions[ix, iy, slice["idx"]] != -1:
                             continue
-                        input = slice["X"][:, :, x:x + self.n, y:y + self.n, :]
+                        input = slice["X"][:, :, x:x + self.n, y:y + self.n, :].clone()
                         if self.transform is not None:
                             input = self.transform(input)
 
                         batch_input += [input]
                         batch_ix += [ix]
                         batch_iy += [iy]
-                        batch_iz += [slice["idx"]]
+                        batch_iz += [slice["idx"].item()]
 
                         if len(batch_input) == self.batch_size:
                             dur_eval += self._predict_batch(net, device, torch.cat(batch_input), batch_ix, batch_iy, batch_iz)
+                            batch_input, batch_ix, batch_iy, batch_iz = [], [], [], []
                             if save_next_batch:
                                 np.save(self.load, self.predictions)
                                 save_next_batch = False

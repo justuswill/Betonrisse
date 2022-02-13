@@ -112,7 +112,7 @@ class SemiSynthdata(Dataset):
 
 
 def create_semisynthetic(dest_input, dest_label, size=1000, width=3, num_cracks=1):
-    data = SemiSynthdata(n=100, size=size, empty=True, width=width, num_cracks=1)
+    data = SemiSynthdata(n=100, size=size, width=width, num_cracks=[0, 1])
     for i, x in enumerate(data):
         if i >= size:
             break

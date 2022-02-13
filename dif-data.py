@@ -261,8 +261,8 @@ if __name__ == "__main__":
 
     synth = Betondataset("semisynth-inf", batch_size=4, shuffle=False, test=0)
     path, idxs, bits, val_shift, val_scale = [
-        TUBE_PATH, [(13, 3, 14), (8, 20, 14), (6, 6, 0), (10, 5, 0)], 8, 0.6, 2.7]
-        # HPC_16_PATH, [(2, 3, 0), (1, 8, 0), (2, 9, 5), (4, 4, 4)], 16, 0.13, 0.55]
+        TUBE_PATH, [(13, 3, 14), (8, 20, 14), (6, 6, 0), (10, 5, 0)], 8, 0.58, 8.24]  # 0.6, 2.7]
+        # HPC_16_PATH, [(2, 3, 0), (1, 8, 0), (2, 9, 5), (4, 4, 4)], 16, 0.10, 10.92] # 0.13, 0.55]
     val_set = BetonImg(path, max_val=255)
     val = val_set.dataloader(batch_size=4, idxs=idxs, shuffle=False)
 
@@ -291,11 +291,11 @@ if __name__ == "__main__":
     # mean_std(val_set.slices, workers=0, batch_size=1)
 
     # scale(nxt_synth - train_shift, net)
-    # scale(nxt_val - val_shift, net)
+    scale(nxt_val - val_shift, net)
     # shift(nxt_synth / train_scale, net, scale=train_scale)
-    # shift(nxt_val / val_scale, net, scale=val_scale)
+    shift(nxt_val / val_scale, net, scale=val_scale)
     # shift(nxt_synth / train_scale, net, logx=False, scale=train_scale)
-    # shift(nxt_val / val_scale, net, logx=False, scale=val_scale)
+    shift(nxt_val / val_scale, net, logx=False, scale=val_scale)
 
     # explain(nxt_synth, net, anim=False)
     # explain(nxt_val, net, anim=True)
