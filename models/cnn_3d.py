@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 
 class Net(nn.Module):
-    def __init__(self, in_channels=1, dim=100, layers=1, out_conv_channels=None, extra_pool=None, dropout=0):
+    def __init__(self, in_channels=1, dim=100, layers=1, out_conv_channels=None, extra_pool=None, dropout=0, kernel_size=4):
         """
         Define a standard CNN with <layer> blocks of convolution + pooling
         and a final pooling layer with outdim ~ <dim> / 2**(<layers> + <extrapool>)
@@ -37,21 +37,21 @@ class Net(nn.Module):
             conv = nn.Sequential(
                 nn.Conv3d(
                     in_channels=conv_channels[i], out_channels=conv_channels[i+1],
-                    kernel_size=4, stride=1, padding=1, bias=False
+                    kernel_size=kernel_size, stride=1, padding=1, bias=False
                 ),
                 nn.BatchNorm3d(conv_channels[i+1]),
                 nn.LeakyReLU(0.2, inplace=True)
             )
             self.add_module("conv%d" % i, conv)
 
-        # Pooling - outdim = dim / 2
+        # Pooling - outdim = dim // 2
         self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
-        self.final_pool = nn.MaxPool3d(kernel_size=2 * extra_pool, stride=2**(extra_pool + 1))
+        self.final_pool = nn.MaxPool3d(kernel_size=2 * extra_pool, stride=2 * extra_pool)
 
         # Compute output size after conv+pool layers
         self.out_dim = dim
         for _ in range(layers):
-            self.out_dim = (self.out_dim - 1) // 2
+            self.out_dim = (self.out_dim + (3 - kernel_size)) // 2
         self.out_dim = self.out_dim // extra_pool
 
         # Linear with Dropout in all but last layer
@@ -59,16 +59,20 @@ class Net(nn.Module):
         self.fc2 = nn.Sequential(nn.Linear(128, 64), nn.Dropout(p=dropout))
         self.fc3 = nn.Sequential(nn.Linear(64, 1), nn.Dropout(p=0))
 
-    def forward(self, x):
+    def forward(self, x, filter=False):
         for i in range(self.layers):
             conv = getattr(self, "conv%d" % i)
             pool = self.final_pool if i == self.layers - 1 else self.pool
-            x = pool(conv(x))
+            f = conv(x)
+            x = pool(f)
         x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        return x
+        if filter:
+            return f, x
+        else:
+            return x
 
 
 

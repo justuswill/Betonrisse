@@ -13,7 +13,7 @@ Synthetic data containing cracks (simulated as Brownian surface) and optional fr
 
 class Synthdata(Dataset):
     def __init__(self, n=128, size=1000, noise=True, snr=2, empty=True, cached=True, binary_labels=False,
-                 transform=None, data_transform=None, **kwargs):
+                 transform=None, data_transform=None, offset=0, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces and optional fractal noise
 
@@ -22,6 +22,7 @@ class Synthdata(Dataset):
         :param noise: if fractal noise should be added
         :param snr: signal to noise ratio - noise range is set to [0, 2/snr] with a mean of 1/snr
         :param empty: if samples should include pictures without cracks (e.g. only noise)
+        :param offset: range of the uniform random offset - Should be smaller than n/2
         :param cached: if samples at fixed index should be cached and reloaded or generated anew
         :param binary_labels: if set true, labels are 1 if its an image of a crack, 0 else.
                               if set false, labels are the same size as the picture with 1 where the crack is.
@@ -35,6 +36,7 @@ class Synthdata(Dataset):
         self.noise = noise
         self.noise_scale = 2/snr
         self.empty = empty
+        self.offset = offset
         self.cached = cached
         self.cache = dict()
         self.binary_labels = binary_labels
@@ -54,7 +56,16 @@ class Synthdata(Dataset):
         sample = np.zeros((1, self.n, self.n, self.n), dtype=np.float32)
         empty = self.empty and np.random.choice([True, False])
         if not empty:
-            sample += generate_crack(self.n, **self.brown_kwargs)
+            crack = generate_crack(self.n, **self.brown_kwargs)
+            if self.offset > 0:
+                offsets = np.random.randint(-self.offset, self.offset+1, size=3)
+                s_l = [np.maximum(0, x) for x in offsets]
+                s_o = [np.minimum(self.n, self.n + x) for x in offsets]
+                c_l = [np.maximum(0, -x) for x in offsets]
+                c_o = [np.minimum(self.n, self.n - x) for x in offsets]
+                sample[0, s_l[0]:s_o[0], s_l[1]:s_o[1], s_l[2]:s_o[2]] += crack[c_l[0]:c_o[0], c_l[1]:c_o[1], c_l[2]:c_o[2]]
+            else:
+                sample[0] += crack
 
         # label
         if self.binary_labels:

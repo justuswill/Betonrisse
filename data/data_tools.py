@@ -23,22 +23,20 @@ def plot_batch(x, acc=2, ax=None, title=None, scale=None):
     :return image that can be shown with imshow later
     """
     if ax is None:
-        plt.figure(figsize=(8, 8))
-    else:
-        plt.sca(ax)
+        fig, ax = plt.subplots(figsize=(8, 8))
 
     sz = x.shape[-1]
-    plt.axis("off")
+    ax.set_axis_off()
     if title is None:
         slice = "". join([d for i, d in enumerate(["x", "y", "z"]) if i != acc])
         title = "Training Images (%s)" % slice
-    plt.title(title)
+    ax.set_title(title)
     img = np.transpose(make_grid(torch.reshape(torch.transpose(torch.transpose(
             x, 2, 2 + acc)[:, :, 0:sz:(sz // 7), :, :], 1, 2), (-1, 1, sz, sz)),
             padding=2, normalize=scale is None).cpu(), (1, 2, 0))
     if scale is not None:
         img = np.clip(scale * img, 0, 1)
-    plt.imshow(img)
+    ax.imshow(img)
     return img
 
 
@@ -86,17 +84,19 @@ def data_max(data):
     print(max)
 
 
-def data_hist(data, mult=1, ax=None):
+def data_hist(data, mult=255, ax=None):
     """
    plot histogram of a dataset
     """
-    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=2)
+    dataloader = DataLoader(data, batch_size=8, shuffle=False, num_workers=0)
 
     bins = np.arange(0, 256)
     hist = np.zeros(bins.shape)
 
     # Compute hist
     for i, batch in enumerate(dataloader):
+        if i > 50000:
+            break
         array = mult * np.array(batch["X"])
         hist += np.bincount(array.reshape(-1).astype(np.int), minlength=256)
         if i % 50:

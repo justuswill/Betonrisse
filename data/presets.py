@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader, SubsetRandomSampler
 import torchvision.transforms as transforms
 from data.data_tools import train_test_dataloader
-from data.data_transforms import ToTensor, Normalize, Normalize_each, Random_rotate_flip_3d
+from data.data_transforms import ToTensor, Normalize, Normalize_each, Normalize_min_max, Random_rotate_flip_3d, RandomCrop
 from data.semisynthetic_data import SemiSynthdata
 from data.real_data import Betondata
 from paths import *
@@ -51,17 +51,46 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                 for x in list(range(a, b))]
         train = [x for x in range(900) if x not in test]
         return [DataLoader(data, sampler=SubsetRandomSampler(idxs), **kwargs) for idxs in [train, test]]
-    # semi-synthetic, just in time
-    elif type == "semisynth-inf":
+    # semi-synthetic, just in time, old with all-black cracks
+    elif type == "semisynth-inf-old":
         confidence = kwargs.pop("confidence", 1)
         norm = kwargs.pop("norm", (0, 1))
         data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 1, 2],
-                             binary_labels=binary_labels,
+                             binary_labels=binary_labels, air=False,
                              confidence=confidence,
                              transform=transforms.Compose([
                                  transforms.Lambda(Random_rotate_flip_3d()),
                                  transforms.Lambda(Normalize(*norm))
                                  # transforms.Lambda(normalize_each())
+                             ]))
+    # semi-synthetic, just in time
+    elif type == "semisynth-inf":
+        confidence = kwargs.pop("confidence", 0.9)
+        norm = kwargs.pop("norm", (0, 1))
+        data = SemiSynthdata(n=100, size=1000, width=[1, 3, 3, 5, 7], num_cracks=[0, 0, 1, 1, 2],
+                             random_scale=True, corruption=0,
+                             binary_labels=binary_labels,
+                             confidence=confidence,
+                             transform=transforms.Compose([
+                                 transforms.Lambda(Random_rotate_flip_3d()),
+                                 # transforms.Lambda(Normalize(*norm))
+                                 # transforms.Lambda(normalize_each())
+                                 transforms.Lambda(Normalize_min_max())
+                             ]))
+    # semi-synthetic, just in time
+    elif type == "semisynth-inf-new":
+        confidence = kwargs.pop("confidence", 0.9)
+        norm = kwargs.pop("norm", (0, 1))
+        data = SemiSynthdata(n=100, size=1000, width=[1, 3, 3, 5, 7], num_cracks=[0, 0, 1, 1, 2], offset=80,
+                             random_scale=True, corruption=0,
+                             binary_labels=binary_labels,
+                             confidence=confidence,
+                             transform=transforms.Compose([
+                                 # transforms.Lambda(RandomCrop(100)),
+                                 transforms.Lambda(Random_rotate_flip_3d()),
+                                 # transforms.Lambda(Normalize(*norm))
+                                 # transforms.Lambda(normalize_each())
+                                 transforms.Lambda(Normalize_min_max())
                              ]))
     # High Performance Concrete
     elif type == "hpc":
@@ -88,7 +117,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                             transforms.Lambda(Random_rotate_flip_3d())
                          ]))
     # High Performance Concrete (only cracks)
-    elif type == "hpc-riss" or "hpc-crack":
+    elif type == "hpc-riss" or type == "hpc-crack":
         # max:
         # mean: 33.24
         # std: 6.69
@@ -106,7 +135,28 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
         # for i, x in zip([101, 55, 56, 58, 60, 65, 85, 95, 97, 99], [0,1,1,1,0,0,0,1,1,0])]
         norm = kwargs.pop("norm", (0, 255))
         data = Betondata(img_dirs=NC_TEST_PATH + "input/",
-                         label_dirs=NC_TEST_PATH + "/label/",
+                         label_dirs=NC_TEST_PATH + "label/",
+                         binary_labels=binary_labels,
+                         transform=transforms.Compose([
+                             transforms.Lambda(ToTensor()),
+                             transforms.Lambda(Normalize(*norm))
+                             # transforms.Lambda(normalize_each())
+                         ]))
+    # Franziska's background images for semi-synth
+    elif type == "bg":
+        norm = kwargs.pop("norm", (0, 255))
+        data = Betondata(img_dirs=BG_PATH,
+                         binary_labels=binary_labels,
+                         transform=transforms.Compose([
+                             transforms.Lambda(ToTensor()),
+                             transforms.Lambda(Normalize(*norm))
+                             # transforms.Lambda(normalize_each())
+                         ]))
+    # Shai's labeled data
+    elif type == "real-val":
+        norm = kwargs.pop("norm", (0, 1))
+        data = Betondata(img_dirs=REAL_TEST_PATH + "input/",
+                         label_dirs=REAL_TEST_PATH + "label/",
                          binary_labels=binary_labels,
                          transform=transforms.Compose([
                              transforms.Lambda(ToTensor()),

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
-from data import create_synthetic, create_semisynthetic, convert_3d, mean_std
+from data import create_synthetic, create_semisynthetic, convert_3d, mean_std, data_hist
 from data import plot_batch, ToTensor, Normalize, Normalize_each, Random_rotate_flip_3d, Resize
 from data import Betondata, Synthdata, SemiSynthdata, Betondataset
 
@@ -12,6 +12,12 @@ from data import Betondata, Synthdata, SemiSynthdata, Betondataset
 """
 Sanity checks and inspection of data
 """
+
+
+def test_bg_data():
+    data = Betondataset("bg", test=0)
+    data_hist(data.dataset, mult=255)
+    plt.show()
 
 
 def test_synthetic_data():
@@ -72,7 +78,7 @@ def test_semisynthetic_data():
     #     create_semisynthetic("D:/Data/Beton/Semi-Synth/w%d-npy-100/input2/" % w,
     #                          "D:/Data/Beton/Semi-Synth/w%d-npy-100/label2/" % w, size=100, width=w, num_cracks=2)
 
-    data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 0, 1, 2],
+    data = SemiSynthdata(n=100, size=1000, width=[1, 3, 5], num_cracks=[0, 1, 2],
                          transform=transforms.Compose([
                              transforms.Lambda(Random_rotate_flip_3d()),
                              transforms.Lambda(Normalize_each())
@@ -91,9 +97,8 @@ def test_semisynthetic_data():
     plt.show()
 
 
-def test_preset_data():
-    train, val = Betondataset("semisynth-inf", binary_labels=True, confidence=0.9,
-                              batch_size=4, shuffle=True, num_workers=1)
+def test_preset_data(name="semisynth-inf-val"):
+    train, val = Betondataset(name, binary_labels=True, batch_size=8, shuffle=True, num_workers=0)
 
     batch = next(iter(train))
     plot_batch(batch["X"], 2)
@@ -112,8 +117,8 @@ def test_preset_data():
 def test_data():
     from data import data_max, mean_std, data_hist, Betondataset
 
-    # dataset = SemiSynthdata(n=100, size=250, width=[1, 3, 5], num_cracks=[0, 0, 1, 2])
-    # data_hist(dataset, mult=255)
+    dataset = SemiSynthdata(n=100, size=250, width=[1, 3, 5], num_cracks=[0, 1, 2], corruption=0.05, random_scale=True)
+    data_hist(dataset, mult=255)
     # data_max(dataset)
     # mean_std(dataset)
 
@@ -125,7 +130,8 @@ def test_data():
 
 
 if __name__ == "__main__":
-    # test_preset_data()
+    # test_bg_data()
+    test_preset_data("semisynth-inf-new")
     # test_synthetic_data()
     # test_semisynthetic_data()
-    test_data()
+    # test_data()

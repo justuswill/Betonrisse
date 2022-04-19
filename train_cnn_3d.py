@@ -40,7 +40,7 @@ def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
     # Load net
     if load != '':
         try:
-            net.load_state_dict(torch.load(load))
+            net.load_state_dict(torch.load(load, map_location=device))
         except FileNotFoundError:
             print("No parameters loaded")
             pass
@@ -53,7 +53,8 @@ def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
     lr = 0.0001
     weight_decay = 0.1
     beta1 = 0.9
-    optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
+    # optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
+    optimizer = optim.SGD(net.parameters(), lr=1e-8, weight_decay=weight_decay)
 
     # Animate
     fig, anim_ax = plt.subplots(figsize=(8, 5))
@@ -141,7 +142,7 @@ def metrics(net, testloader, plot=True, anim=None, criterion=None):
             dur += time.time() - start
 
             if criterion is not None:
-                loss += 1 / len(testloader) * criterion(outputs.view(-1), labels).mean().item()
+                loss += 1 / len(testloader) * criterion(outputs.view(-1), labels.to(device)).mean().item()
 
             predicted = predicted.cpu()
             pos_out += outputs[labels == 1].view(-1).tolist()
@@ -334,23 +335,49 @@ def inspect_net(net, test, path):
 
 
 if __name__ == "__main__":
-    from models import LegNet1
+    from models import Net, LegNet1, Net_from_Seg
     torch.cuda.empty_cache()
 
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("On device: %s" % device)
 
     # Data
-    train, val = Betondataset("semisynth-inf", binary_labels=True, confidence=0.9,
+    train, val = Betondataset("semisynth-inf-new", binary_labels=True, confidence=0.9,
                               batch_size=4, shuffle=True, num_workers=1)
-    # test = Betondataset("nc-val", test=0, batch_size=4, norm=(0, 1))
-    test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
+    test = Betondataset("real-val", test=0, batch_size=4, norm=(0, 255))  # 255 * 0.082, 255 * 1.33
+    # test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
     # Net
-    net = LegNet1(layers=1).to(device)
+    net = Net(layers=1, dropout=0.1, kernel_size=5).to(device)
+    # net = LegNet1(layers=1).to(device)
+    # net = Net_from_Seg(layers=3, dropout=0.1)
 
-    load = "checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp"
-    # train_net(net, train, val, load, checkpoints=True, num_epochs=10)
-    # inspect_net(net, test, load) b
-    analyze_net(net, test, load)
+    # load = "checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp"
+    # load = "checkpoints/air_2"
+    # load = "checkpoints/unet_tin.cp"
+    # net.load_state_dict(torch.load(load, map_location=device))
+
+    save = "checkpoints/current"
+    save_opt = "checkpoints/opt/all"
+    # save = "checkpoints/unet_l3"
+    train_net(net, train, val, load=save, checkpoints=True, num_epochs=3)
+    # inspect_net(net, test, load)
+    # analyze_net(net, test, load)
     # animate_dataset(net, test, load, n=1000)
+
+    """
+    real fitted
+    TP|TN|FP|FN: 23 27 4 6
+    Accuracy: 83.33 %
+    Precision: 85.19 %
+    Recall: 79.31 %
+    TNR: 87.10 %
+    
+    real nothing
+    TP|TN|FP|FN: 27 22 9 2
+    Accuracy: 81.67 %
+    Precision: 75.00 %
+    Recall: 93.10 %
+    TNR: 70.97 %
+    """

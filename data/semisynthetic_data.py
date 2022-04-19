@@ -24,7 +24,8 @@ class Datasetiter():
 
 
 class SemiSynthdata(Dataset):
-    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False, confidence=1,
+    def __init__(self, n=128, size=1000, binary_labels=False, num_cracks=1, random_scale=False, air=True,
+                 confidence=1, corruption=0, corruption_mean=24.5, offset=0,
                  transform=None, data_transform=None, **kwargs):
         """
         Generate 3d images of cracks with brownian surfaces
@@ -34,9 +35,14 @@ class SemiSynthdata(Dataset):
         :param binary_labels: if set true, labels are 1 if its an image of a crack, 0 else.
                               if set false, labels are the same size as the picture with 1 where the crack is.
         :param num_cracks: list of possible number of cracks
+        :param air: ifd true set air/crack values to a dark but nonzero gaussian noise
         :param random_scale: if True mean and scale of crack and background are randomly varied
         :param confidence: set labels of cracks to confidence (default 1)
                            and labels of non-cracks to 1 - confidence (default 0)
+
+        :param corruption: when interpolating between air (gaussian noise) and bg pixels
+                           fix a minimal contribution of the gaussian noise, also noising the bg
+        :param corruption_mean: correct the mean of the gaussian noise in regions of less air to be this value
 
         :param transform: apply transforms to data and labels
         :param data_transform: apply transforms only to data, applied after transform
@@ -51,14 +57,18 @@ class SemiSynthdata(Dataset):
                             transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
                        ]))
 
-        synth = Synthdata(n=n, size=size, noise=False, empty=False, cached=False, binary_labels=True, **kwargs,
+        synth = Synthdata(n=n + offset, size=size, noise=False, empty=False, cached=False, binary_labels=True, **kwargs,
                           transform=transforms.Compose([
                               transforms.Lambda(ToTensor()),
+                              transforms.Lambda(RandomCrop(n)),
                               transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
                           ]))
 
         self.n = n
         self.size = size
+        self.air = air
+        self.corruption = corruption
+        self.corruption_mean = corruption_mean
         self.random_scale = random_scale
         self.noise_iter = Datasetiter(bg)
         self.synth = synth
@@ -77,6 +87,10 @@ class SemiSynthdata(Dataset):
         ths_num_cracks = np.random.choice(self.num_cracks)
         for _ in range(ths_num_cracks):
             more_sample = self.synth[idx]["X"]
+            # print(torch.sum(more_sample == 0) / self.n ** 3 * 100)
+            while torch.all(more_sample != 0):
+                # print("redo")
+                more_sample = self.synth[idx]["X"]
             sample = torch.clamp(sample * more_sample, max=1)
 
         if self.binary_labels:
@@ -85,21 +99,28 @@ class SemiSynthdata(Dataset):
         else:
             label = 1 - sample
 
-        # todo: experiment some more (air_mean > 0!)
-        air_mean = 0
-        air_scale = 0
         noise_shift = 0
         noise_scale = 1
+        if self.air:
+            # by visual inspection of bg (peak at 12.5, extend 9-17)
+            air_mean = 12.5
+            air_scale = 2.5
+        else:
+            air_mean = 0
+            air_scale = 0
         if self.random_scale:
-            air_mean = np.random.normal(air_mean, 1.5)
+            air_mean = np.random.normal(air_mean, 2)
             noise_shift = np.random.normal(noise_shift, 1)
-            air_scale = np.random.normal(air_scale, 0.5)
-            noise_scale = np.random.normal(noise_scale, 0.2)
 
         # Combine noise and air (crack) - weighted by sample
         noise = noise_shift + noise_scale * torch.squeeze(next(self.noise_iter)["X"], 0)
         air = air_mean + air_scale * torch.randn(sample.shape)
-        sample = torch.clamp((noise * sample + air * (1 - sample)) / 255, min=0, max=1)
+        if self.corruption > 0:
+            # observe a noisy bg
+            sample2 = torch.clamp(sample, min=0, max=1 - self.corruption)
+            sample = torch.clamp((noise * sample2 + air * (1 - sample2) + (self.corruption_mean - air_mean) * (1 - sample)) / 255, min=0, max=1)
+        else:
+            sample = torch.clamp((noise * sample + air * (1 - sample)) / 255, min=0, max=1)
 
         if self.transform is not None:
             sample = self.transform(sample)

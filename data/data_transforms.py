@@ -42,6 +42,20 @@ class Normalize_each:
         return (t - t.mean()) / t.std()
 
 
+class Normalize_min_max:
+    """ Normalize with per-image mean and var """
+    def __call__(self, t):
+        min = np.percentile(t, 0.1)
+        max = np.percentile(t, 99.9)
+        return (t - min) / (max - min)
+
+
+class Normalize_median:
+    """ Normalize with per-image mean and var """
+    def __call__(self, t):
+        return t - t.median()
+
+
 class Resize:
     """ ? Resize tensors to new 3D shape by interpolation """
     def __init__(self, sz):

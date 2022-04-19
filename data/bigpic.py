@@ -10,7 +10,6 @@ import matplotlib.colors as mc
 from matplotlib.animation import FFMpegWriter
 from abc import ABC, abstractmethod
 from typing import Iterator
-import gc
 
 import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, Sampler
@@ -250,7 +249,7 @@ class BetonImg(Dataset):
             self.predictions[ix, iy, iz] = out
         return dur_eval
 
-    def predict(self, net, device, head=None):
+    def predict(self, net, device, head=None, skip=None):
         """
         Predict all chunks of the image.
 
@@ -266,6 +265,8 @@ class BetonImg(Dataset):
 
         # Continue partial prediction
         idxs = np.where(np.any(self.predictions == -1, axis=(0, 1)))[0]
+        if skip is not None:
+            idxs = idxs[skip:]
         if head is not None:
             idxs = idxs[:head]
         dataloader = self.slices.dataloader(batch_size=1, sampler=SubsetSampler(idxs))
@@ -294,7 +295,7 @@ class BetonImg(Dataset):
                         if len(batch_input) == self.batch_size:
                             dur_eval += self._predict_batch(net, device, torch.cat(batch_input), batch_ix, batch_iy, batch_iz)
                             batch_input, batch_ix, batch_iy, batch_iz = [], [], [], []
-                            if save_next_batch:
+                            if save_next_batch and self.load is not None:
                                 np.save(self.load, self.predictions)
                                 save_next_batch = False
                 # checkpoint after each slice
@@ -303,7 +304,8 @@ class BetonImg(Dataset):
             # final batch + checkpoint
             if len(batch_input) > 0:
                 dur_eval += self._predict_batch(net, device, torch.cat(batch_input), batch_ix, batch_iy, batch_iz)
-            np.save(self.load, self.predictions)
+            if self.load is not None:
+                np.save(self.load, self.predictions)
 
         net.train()
         dur_full = time.time() - start_full
@@ -323,8 +325,9 @@ class BetonImg(Dataset):
         # therefore we use net output directly, clipping to a max/min value found by inspection
         # values roughly between 5% and 95%
         # b = 3
-        b = 500
+        b = 3
         norm = mc.Normalize(vmin=-b, vmax=b, clip=True)
+        base_alpha = 0.3 if self.overlap / self.n < 0.3 else 0.15
 
         ax.clear()
         ax.set_axis_off()
@@ -335,18 +338,18 @@ class BetonImg(Dataset):
 
                 if mode == "clas":
                     if torch.sigmoid(pred) > cutoff:
-                        ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc="red", alpha=0.3))
+                        ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc="red", alpha=base_alpha))
                 elif mode == "cmap":
                     c = list(plt.cm.get_cmap("RdYlGn_r")(norm(pred)))
-                    c[3] = 0.3 * c[3]
+                    c[3] = base_alpha * c[3]
                     ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc=c))
                 elif mode == "alpha":
-                    alpha = 0.3 * norm(pred)
+                    alpha = base_alpha * norm(pred)
                     ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc="red", alpha=alpha))
                 elif mode == "cmap-alpha":
                     # alpha = 2 * abs(norm(pred) - 0.5)
                     # alpha = 0.3 * alpha if alpha > 0.4 else 0
-                    alpha = 0.3 * norm(pred)
+                    alpha = base_alpha * norm(pred)
                     c = list(plt.cm.get_cmap("RdYlGn_r")(norm(pred)))
                     c[3] = alpha
                     ax.add_patch(mpatch.Rectangle((y, x), self.n, self.n, fill=True, fc=c))

@@ -13,8 +13,10 @@ SYNTH_PATH = "D:/Data/Beton/Synth/"
 # saved semisynthetic, multiple folders, different widths and number of cracks
 SEMISYNTH_PATHS_INPUT = ["D:/Data/Beton/Semi-Synth/w%d-npy-100/input%s/" % (w, s) for w in [1, 3, 5] for s in ["", "2"]]
 SEMISYNTH_PATHS_LABEL = ["D:/Data/Beton/Semi-Synth/w%d-npy-100/label%s/" % (w, s) for w in [1, 3, 5] for s in ["", "2"]],
-# saved real (NC), has folder input/ and label/
+# saved real (NC) [Justus], has folder input/ and label/
 NC_TEST_PATH = "D:Data/Beton/NC/test/"
+# saved real (NC / HPC) [Shai], has folder input/ and label/
+REAL_TEST_PATH = "D:Data/Beton/Test-Real/"
 # backgrounds for semisynthetic
 BG_PATH = "D:/Data/Beton/Semi-Synth/bg-npy-256/"
 
