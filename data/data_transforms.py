@@ -80,7 +80,7 @@ class Resize_3d:
 
         meshz, meshy, meshx = torch.meshgrid([torch.linspace(-1, 1, self.sz[i]) for i in range(3)])
         grid = torch.stack((meshx, meshy, meshz), 3)
-        grid = grid.unsqueeze(0)
+        grid = grid.unsqueeze(0).repeat(t.shape[0], 1, 1, 1, 1)
 
         return F.grid_sample(t, grid.to(t.dtype), align_corners=True)
 

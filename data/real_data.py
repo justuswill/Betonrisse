@@ -10,7 +10,7 @@ Dataset object with real data for training and testing
 
 
 class Betondata(Dataset):
-    def __init__(self, img_dirs, label_dirs=None, binary_labels=False, transform=None, data_transform=None):
+    def __init__(self, img_dirs, label_dirs=None, binary_labels=False, confidence=1.0, transform=None, data_transform=None):
         """
         Load npy from (multiple) locations, optional with labels
 
@@ -35,6 +35,8 @@ class Betondata(Dataset):
         # find matching labels
         self.labels = label_dirs is not None
         self.binary_labels = binary_labels
+        # todo: finish implementation of confidence
+        self.confidence = confidence
         if self.labels:
             if not isinstance(label_dirs, list):
                 label_dirs = [label_dirs]
@@ -60,23 +62,27 @@ class Betondata(Dataset):
 
         out = {"X": sample, "id": idx}
 
-        if self.labels:
-            if self.label_names[idx] is not None:
-                label = np.load(self.label_names[idx]).astype(np.float32)
-                if len(label.shape) < 4:
-                    label = label[np.newaxis, :, :, :]
-                if self.binary_labels:
-                    label = float(np.any(label))
-                elif self.transform is not None:
-                    label = self.transform(label)
-            # No label means no crack
-            else:
-                if self.binary_labels:
-                    label = 0.0
-                else:
-                    label = np.zeros(sample.shape, np.float32)
-                    if self.transform is not None:
+        if self.labels or self.binary_labels:
+            try:
+                if self.label_names[idx] is not None:
+                    label = np.load(self.label_names[idx]).astype(np.float32)
+                    if len(label.shape) < 4:
+                        label = label[np.newaxis, :, :, :]
+                    if self.binary_labels:
+                        label = float(np.any(label))
+                    elif self.transform is not None:
                         label = self.transform(label)
-            out["y"] = label
+                # No label means no crack
+                else:
+                    if self.binary_labels:
+                        label = 0.0
+                    else:
+                        label = np.zeros(sample.shape, np.float32)
+                        if self.transform is not None:
+                            label = self.transform(label)
+                out["y"] = label
+            except AttributeError:
+                # if binary labels w/o label_dir, assume only cracks
+                out["y"] = self.confidence
 
         return out

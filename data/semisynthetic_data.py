@@ -57,12 +57,16 @@ class SemiSynthdata(Dataset):
                             transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
                        ]))
 
+        if offset > 0:
+            trn = transforms.Compose([transforms.Lambda(ToTensor()),
+                                      transforms.Lambda(RandomCrop(n)),
+                                      transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))])
+        else:
+            trn = transforms.Compose([transforms.Lambda(ToTensor()),
+                                      transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))])
+
         synth = Synthdata(n=n + offset, size=size, noise=False, empty=False, cached=False, binary_labels=True, **kwargs,
-                          transform=transforms.Compose([
-                              transforms.Lambda(ToTensor()),
-                              transforms.Lambda(RandomCrop(n)),
-                              transforms.Lambda(Random_rotate_flip_3d(cache=not binary_labels))
-                          ]))
+                          transform=trn)
 
         self.n = n
         self.size = size

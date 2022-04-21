@@ -19,7 +19,7 @@ Train a 3D CNN for Image Classification
 """
 
 
-def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
+def train_net(net, train, test, load="", load_opt="", checkpoints=True, num_epochs=5):
     """
     Train a Classifier
 
@@ -37,6 +37,17 @@ def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
     # Device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+    # Loss / Optimizer
+    # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
+    # pos/all is 2 for semisynth, so basically pos_weight *= 2
+    pos_weight = 0.375
+    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
+    lr = 0.0001
+    weight_decay = 0.1
+    beta1 = 0.9
+    optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
+    # optimizer = optim.SGD(net.parameters(), lr=1e-8, weight_decay=weight_decay)
+
     # Load net
     if load != '':
         try:
@@ -45,16 +56,13 @@ def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
             print("No parameters loaded")
             pass
 
-    # Loss / Optimizer
-    # todo: use CrossEntropyLoss and extra category (e.g. unsure / nothing)
-    # pos/all is 2 for semisynth, so basically pos_weight *= 2
-    pos_weight = 0.75
-    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
-    lr = 0.0001
-    weight_decay = 0.1
-    beta1 = 0.9
-    # optimizer = optim.Adam(net.parameters(), betas=(beta1, 0.999), lr=lr, weight_decay=weight_decay)
-    optimizer = optim.SGD(net.parameters(), lr=1e-8, weight_decay=weight_decay)
+    # Load optimizer state
+    if load_opt != '':
+        try:
+            optimizer.load_state_dict(torch.load(load_opt, map_location=device))
+        except FileNotFoundError:
+            print("No optimizer state loaded")
+            pass
 
     # Animate
     fig, anim_ax = plt.subplots(figsize=(8, 5))
@@ -92,9 +100,11 @@ def train_net(net, train, test, load="", checkpoints=True, num_epochs=5):
 
         if checkpoints:
             # do checkpointing
-            torch.save(net.state_dict(), '%s_epoch_%d' % (load or "netG", epoch))
+            torch.save(net.state_dict(), '%s_epoch_%d' % (load or "net", epoch))
+            torch.save(optimizer.state_dict(), load_opt or "opt")
 
-        metrics(net, test, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
+        if epoch > 0 and epoch % 1 == 0:
+            metrics(net, test, plot=epoch == num_epochs, anim=(Writer, anim_ax), criterion=criterion)
         # metrics(net, test, plot=True, criterion=criterion)
 
     Writer.finish()
@@ -343,25 +353,26 @@ if __name__ == "__main__":
     print("On device: %s" % device)
 
     # Data
-    train, val = Betondataset("semisynth-inf-new", binary_labels=True, confidence=0.9,
-                              batch_size=4, shuffle=True, num_workers=1)
+    train = Betondataset("semisynth-inf-fix", binary_labels=True, confidence=0.9,
+                              batch_size=4, shuffle=True, num_workers=1, test=0)
+    val = train
     test = Betondataset("real-val", test=0, batch_size=4, norm=(0, 255))  # 255 * 0.082, 255 * 1.33
     # test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
     # Net
     net = Net(layers=1, dropout=0.1, kernel_size=5).to(device)
     # net = LegNet1(layers=1).to(device)
-    # net = Net_from_Seg(layers=3, dropout=0.1)
+    # net = Net_from_Seg(layers=3, dropout=0.1).to(device)
 
     # load = "checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp"
     # load = "checkpoints/air_2"
     # load = "checkpoints/unet_tin.cp"
     # net.load_state_dict(torch.load(load, map_location=device))
 
-    save = "checkpoints/current"
-    save_opt = "checkpoints/opt/all"
+    save = "checkpoints/fix2"
+    save_opt = ""  # "checkpoints/opt/crop"
     # save = "checkpoints/unet_l3"
-    train_net(net, train, val, load=save, checkpoints=True, num_epochs=3)
+    train_net(net, train, val, load=save, load_opt=save_opt, checkpoints=True, num_epochs=5)
     # inspect_net(net, test, load)
     # analyze_net(net, test, load)
     # animate_dataset(net, test, load, n=1000)

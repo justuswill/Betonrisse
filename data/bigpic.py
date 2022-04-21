@@ -15,7 +15,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, Sampler
 import torchvision.transforms as transforms
 
-from data.data_transforms import Normalize
+from data.data_transforms import Normalize, Resize_3d
 from paths import *
 plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
 
@@ -156,7 +156,7 @@ class SubsetSampler(Sampler[int]):
 
 
 class BetonImg(Dataset):
-    def __init__(self, img_path, n=100, overlap=25, max_val=255, batch_size=4, transform=None, load=None):
+    def __init__(self, img_path, n=100, n_in=100, overlap=25, max_val=255, batch_size=4, transform=None, load=None):
         """
         Load, split and analyze a large 3D image.
         As a Pytorch dataset it provides (very inefficiently) image chunks.
@@ -164,7 +164,8 @@ class BetonImg(Dataset):
         :param img_path: path to image file, currently supports:
             .tar (dir of .jpg / .png of xy slices)
             .tif / .tiff
-        :param n: input size of classification/segmentation as (n x n x n), default: 100
+        :param n_in: input size of classification/segmentation as (n x n x n), default: 100
+        :param n: chunk size of data, will be resized to be of size n_in if n != n_in, default: 100
         :param overlap: number of shared pixels with neighboring image chunks, default: 25
         :param max_val: biggest pixel value possible in loaded image format, default: 2**8 (8 bit grayscale)
         :param batch_size: number of chunks in each batch for prediction
@@ -179,6 +180,10 @@ class BetonImg(Dataset):
             raise ValueError("file type not supported")
 
         self.n = n
+        self.n_in = n_in
+        if self.n != self.n_in:
+            self.resize = Resize_3d((n_in, n_in, n_in))
+
         self.overlap = overlap
         self.max_val = max_val
         self.batch_size = batch_size
@@ -241,6 +246,8 @@ class BetonImg(Dataset):
 
         :return: evaluation time
         """
+        if self.n != self.n_in:
+            batch = self.resize(batch)
         dur_eval = 0
         start = time.time()
         batch_output = net(batch.to(device)).cpu().float().view(-1)
