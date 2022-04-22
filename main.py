@@ -12,6 +12,7 @@ Prediction and animation of big 3D images
 """
 
 if __name__ == "__main__":
+    # Check memory usage
     import tracemalloc
     tracemalloc.start()
     torch.cuda.empty_cache()
@@ -42,15 +43,18 @@ if __name__ == "__main__":
     net = Net(layers=1, dropout=0.1, kernel_size=5).to(device)
     # net = LegNet1(layers=1).to(device)
     # net = Net_from_Seg(layers=3, dropout=0.1)
-    net.load_state_dict(torch.load("checkpoints/zoom_epoch_5", map_location=device))
+    net.load_state_dict(torch.load("checkpoints/current2.cp", map_location=device))
 
+    # only predict one layer for fast prototyping
     layer = 515
     up = int(np.floor(layer / (n - overlap)) + 1)
     low = int(np.ceil((layer - n) / (n - overlap)) + 1)
     skip = int(np.mean([low, up]))
+
     data.predict(net, device, head=1, skip=skip)
     # data.predict(net, device)
     print("Prediction done")
+
     data.plot_layer(layer, mode="cmap")
     data.plot_layer(layer, mode="cmap-alpha")
     data.plot_layer(layer, mode="clas")

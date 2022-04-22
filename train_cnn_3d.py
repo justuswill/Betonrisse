@@ -363,6 +363,7 @@ if __name__ == "__main__":
     # net = LegNet1(layers=1).to(device)
     # net = Net_from_Seg(layers=3, dropout=0.1).to(device)
 
+    # Load (without training)
     # load = "checkpoints/shift_0_11/netcnn_l1p_epoch_5.cp"
     # load = "checkpoints/air_2"
     # load = "checkpoints/unet_tin.cp"

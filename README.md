@@ -12,8 +12,8 @@ The module contains tools for
 
 Additionally, some trained models and current results are provided.
 
-In the following, all available functionality and potential use cases are described.
-To use this module a good start is to look into `train_cdd_3d.py` and `main.py`
+In the following, all available functionality and potential use cases are described.  
+A good starting point is to look into `train_cdd_3d.py` and `main.py`
 for training and prediction respectively.
 
 ---
@@ -71,7 +71,7 @@ tp point to the correct folders.
 Additionally, some files might need to be converted to supported formats (like `.npy`).
 This can be done with the methods in `data/unpack.py`.
 
-For example, when training on semi-synthethic data that are created just-in-time ,
+For example, when training on semi-synthethic data that is created just-in-time,
 the background images have to be downloaded and converted to  
 `.npy` files, e.g. with code similar to
 
@@ -85,6 +85,18 @@ Then, `BG_PATH` in `paths.py` has to be set appropriately.
 
 ## Todos:
 
+As is, prediction is still not perfect - especially thin or irregular cracks are not detected very well.
+Additionally, a thorough examination of generalization capabilities across all the available data is needed.
+For now, most testing has been done on the cylindrical concrete sample also seen above.
+
+There are still a few possible ideas to improve the results which might be worth pursuing.
+These include, among others, construction of better training sets.
+This could possibly be done using machine learning tools like Neural Style Transfer.
+Using a fixed crack width for training and then applying the model on different scales
+or reusing more general features learned in the segmentation task has been tried briefly
+but could be looked into more extensively.
+Averaging over different rotations or using a rotation-invariant CNN could also lead to further improvements.
+
 ---
 
 ## Data:
@@ -94,7 +106,7 @@ All relevant data can be found in the Fraunhofer Cloud.
 
 In the `data` module, there are tools to
 generate, process, prepare, analyze, visualize all kinds of data,  
-including pipelines to handle prediction of very big 3D images.
+including a pipelines to handle prediction of very big 3D images.
 
 Generally, each type of dataset should be stored as a `PyTorch Dataset`.
 The relevant implementations are `SynthData`, `Betondata` and `SemiSynthdata`.
@@ -108,14 +120,14 @@ train, val = Betondataset("semisynth-inf-val", batch_size=4, confidence=0.9)
 ```
 
 For large 3D image data, that has to be cut in smaller chunks, the `BetonImg` class
-and its method can be used.
+and its methods can be used.
 
 ### Presets
 
 `Betondataset` in `data/presets.py` allows easy access to ready-to-use datasets (as a `PyTorch DataLoader`) by a keyword.  
 It contains many presets that were/are useful for training and testing and allows to further modify
 them by setting hyperparameters. These include parameters about data preparation
-(e.g. batch_size, the size of the validation set, if data should be shuffled)
+(e.g. batch size, the size of the validation set, if data should be shuffled)
 or the data itself (e.g. normalization, confidence).
 Some of the more important presets include:
 
@@ -133,7 +145,7 @@ only takes the keyword as a parameter.
 ### Transforms
 
 When creating a new preset or extending an existing one, it is important to do some preprocessing on the raw data,
-such as normalization or data augmentation. These can be found in `data/data_transforms.py` and include, for example,
+such as normalization or data augmentation. These transforms can be found in `data/data_transforms.py` and include, for example,
 normalization of the pixel values (e.g. to a fixed interval), interpolation-based resizing of images and random data manipulations for augmentation (e.g. random cropping, rotating or flipping). 
 They can be combined and applied to any dataset like a `torchvision transform`, e.g.
 
@@ -152,7 +164,7 @@ data = SemiSynthdata(transform=transform)
 
 Tools for data analysis and visualization are contained in `data/data_tools.py`.
 These include methods for plotting histograms of pixel values, plotting batches and
-calculating dataset-wide characteristics like the mean, standard daviation or maxima.
+calculating dataset-wide characteristics like the mean, standard deviation or maximum.
 
 For use cases see `test.py` (or `dif-data.py`).
 
@@ -161,14 +173,14 @@ For use cases see `test.py` (or `dif-data.py`).
 Synthetic cracks in 3D are modelled by a Brownian Surface (`data/brownian_surface.py`) which can be combined
 with real background data to form semi-synthetic data or with a synthetic background
 modelled as perlin or fractal noise (`data/noise.py`).
-Processing and creating synthetic data is done in `data/synthetic_data.py` based on the `SynthData` class, but is off little value on its own.
+Processing and creation of synthetic data is done in `data/synthetic_data.py` based on the `SynthData` class, but is off little value on its own.
 
 ### Semi-Synthetic Data
 
 To generate semi-synthetic data, background images have to be combined with synthetic cracks.
-Processing and creating synthetic data is done in `data/synthetic_data.py` based on the `SemiSynthdata` class.
+Processing and creation of semi-synthetic data is done in `data/synthetic_data.py` based on the `SemiSynthdata` class.
 The creation can be customized by changing, e.g. the number and thickness of the cracks or the grey values
-that the cracks take.
+that the cracks may have.
 
 ### Real Data
 
@@ -217,11 +229,11 @@ However, pursuit of this idea was stopped before any usable results were achieve
 
 A set of recently trained versions of the net can be found in `checkpoints/`
 
-| checkpoint          | parameters                            | training                                                                    |
-| -----------         | -----------                           | -----------                                                                 |
-| `current.cp`        | `layer=1, kernel_size=5, dropout=0.1` | trained on 3000 images from `semisynth-inf`     |
-| `current2.cp`       | `layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-new` |
-| `fixed_width3.cp`   | `layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-fix` |
+| checkpoint          | parameters                                   | training                                                                    |
+| -----------         | -----------                                  | -----------                                                                 |
+| `current.cp`        | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 3000 images from `semisynth-inf`     |
+| `current2.cp`       | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-new` |
+| `fixed_width3.cp`   | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-fix` |
 
 ### Training
 
