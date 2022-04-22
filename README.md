@@ -18,7 +18,27 @@ for training and prediction respectively.
 
 ---
 
+Results that can be obtained by the tools in this module include, for example, prediction on real data,
 
+<p align="center">
+  <img alt="Prediction" src=https://github.com/Jukamala/Betonrisse/blob/master/results/example_prediction.gif?raw=True>
+</p>
+
+visualization of convolutional filters / features
+
+<p align="center">
+  <img alt="Features 1" title="features of first layer in CNN" src="https://github.com/Jukamala/Betonrisse/blob/master/results/example_visulization1.png?raw=True" width="45%">
+&nbsp; &nbsp; &nbsp;
+  <img alt="Features 2" title="features of third layer in Unet" src="https://github.com/Jukamala/Betonrisse/blob/master/results/example_visulization2.png?raw=True" width="45%">
+</p>
+
+or checking robustness to changes in scale and shift.
+
+<p align="center">
+  <img alt="Robustness 1" title="on training data" src="https://github.com/Jukamala/Betonrisse/blob/master/results/example_robustnes_1.png?raw=True" width="45%">
+&nbsp; &nbsp; &nbsp;
+  <img alt="Robustness 2" title="on validation data" src="https://github.com/Jukamala/Betonrisse/blob/master/results/example_robustnes_2.png?raw=True" width="45%">
+</p>
 
 ---
 
