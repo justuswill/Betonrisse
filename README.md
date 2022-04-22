@@ -132,7 +132,7 @@ or the data itself (e.g. normalization, confidence).
 Some of the more important presets include:
 
 | Keyword             | Dataset                                                              |
-| -----------         | -----------                                                          |
+| ------------------- | -------------------------------------------------------------------- |
 | `semisynth-new`     | pre-generated semi-synthetic data (provided as `.npy`)               |
 | `semisynth-inf-new` | non-repeating semi-synthetic data that is generated just-in-time (background provided as `.npy`)|
 | `real-val`          | hand labeled real data from HPC and NC concrete (provided as `.npy`) |
@@ -229,8 +229,8 @@ However, pursuit of this idea was stopped before any usable results were achieve
 
 A set of recently trained versions of the net can be found in `checkpoints/`
 
-| checkpoint          | parameters                                   | training                                                                    |
-| -----------         | -----------                                  | -----------                                                                 |
+| checkpoint          | parameters                                   | training                                        |
+| ------------------- | -------------------------------------------- | ----------------------------------------------- |
 | `current.cp`        | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 3000 images from `semisynth-inf`     |
 | `current2.cp`       | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-new` |
 | `fixed_width3.cp`   | `n=100, layer=1, kernel_size=5, dropout=0.1` | trained on 5000 images from `semisynth-inf-fix` |
