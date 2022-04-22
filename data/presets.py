@@ -51,6 +51,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                 for x in list(range(a, b))]
         train = [x for x in range(900) if x not in test]
         return [DataLoader(data, sampler=SubsetRandomSampler(idxs), **kwargs) for idxs in [train, test]]
+    # stored semi-synthetic based on tifs
     elif type == "semisynth-new":
         confidence = kwargs.pop("confidence", 0.9)
         data_crack = Betondata(img_dirs=SEMISYNTH_PATHS_ALL,
@@ -113,7 +114,6 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
     # semi-synthetic, just in time
     elif type == "semisynth-inf-new":
         confidence = kwargs.pop("confidence", 0.9)
-        norm = kwargs.pop("norm", (0, 1))
         data = SemiSynthdata(n=100, size=1000, width=[1, 3, 3, 5, 7], num_cracks=[0, 0, 1, 1, 2], offset=80,
                              random_scale=True, corruption=0,
                              binary_labels=binary_labels,
@@ -198,7 +198,7 @@ def Betondataset(type, binary_labels=True, test=0.2, **kwargs):
                          ]))
     # train + validation to be used
     elif type == "semisynth-inf-val":
-        return [Betondataset("semisynth-inf", test=0, **kwargs), Betondataset("nc-val", test=0, **kwargs)]
+        return [Betondataset("semisynth-inf-new", test=0, **kwargs), Betondataset("real-val", test=0, **kwargs)]
     else:
         raise ValueError("Dataset not supported")
 

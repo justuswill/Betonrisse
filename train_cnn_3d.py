@@ -15,7 +15,7 @@ plt.rcParams['animation.ffmpeg_path'] = FFMPEG_PATH
 
 
 """
-Train a 3D CNN for Image Classification
+Train a 3D CNN for Image Classification and evaluate results
 """
 
 
@@ -353,9 +353,8 @@ if __name__ == "__main__":
     print("On device: %s" % device)
 
     # Data
-    train = Betondataset("semisynth-inf-fix", binary_labels=True, confidence=0.9,
-                              batch_size=4, shuffle=True, num_workers=1, test=0)
-    val = train
+    train, val = Betondataset("semisynth-inf-new", binary_labels=True, confidence=0.9,
+                              batch_size=4, shuffle=True, num_workers=1)
     test = Betondataset("real-val", test=0, batch_size=4, norm=(0, 255))  # 255 * 0.082, 255 * 1.33
     # test = Betondataset("nc", test=0, batch_size=4, norm=(0, 255))
 
@@ -369,10 +368,12 @@ if __name__ == "__main__":
     # load = "checkpoints/unet_tin.cp"
     # net.load_state_dict(torch.load(load, map_location=device))
 
+    # Load (and save) model and optimizer state / parameters to these paths
     save = "checkpoints/fix2"
     save_opt = ""  # "checkpoints/opt/crop"
-    # save = "checkpoints/unet_l3"
     train_net(net, train, val, load=save, load_opt=save_opt, checkpoints=True, num_epochs=5)
+
+    # Performance on test set
     # inspect_net(net, test, load)
     # analyze_net(net, test, load)
     # animate_dataset(net, test, load, n=1000)

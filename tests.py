@@ -131,7 +131,7 @@ def test_data():
 
 if __name__ == "__main__":
     # test_bg_data()
-    test_preset_data("semisynth-new")
+    test_preset_data("semisynth-inf-val")
     # test_synthetic_data()
     # test_semisynthetic_data()
     # test_data()
