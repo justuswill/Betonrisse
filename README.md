@@ -1,4 +1,4 @@
-# Concrete Classification with Convolutions Neural Networks
+# Concrete Classification with Convolutional Neural Networks
 This module contains many relevant tools to handle the classification and visualization of 3D concrete image data.
 The goal of these tools are, among others, to efficiently detect and locate cracks in concrete samples.
 This can be used as the start of a pipeline that, for example, provides image segmentation. 
